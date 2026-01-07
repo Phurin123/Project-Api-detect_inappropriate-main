@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Objexify | Sign Up</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../homepage/particles-bg.css" />
+    <link rel="stylesheet" href="../menubar/menubar.css" />
+    <link rel="stylesheet" href="singup.css" />
+    <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+  </head>
+  <body>
+    <div id="menubar"></div>
+    <div id="particles-js"></div>
+
+    <main class="auth-wrapper">
+      <section class="signup-card">
+        <header class="card-head">
+          <p class="eyebrow">เข้าร่วม Objexify</p>
+          <h1>สร้างบัญชีใหม่</h1>
+          <p class="subtitle">
+            เริ่มต้นใช้งานแพลตฟอร์ม AI เพียงไม่กี่ขั้นตอน
+          </p>
+        </header>
+
+        <form id="signupForm" novalidate>
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              autocomplete="off"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              autocomplete="off"
+              required
+            />
+          </div>
+
+          <div class="form-group password-group">
+            <label for="password">Password</label>
+            <div class="input-with-toggle">
+              <input type="password" id="password" name="password" required />
+              <button
+                type="button"
+                class="eye-icon"
+                id="togglePassword"
+                aria-label="Toggle password visibility"
+              >
+                🔒
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group password-group">
+            <label for="confirmPassword">Confirm Password</label>
+            <div class="input-with-toggle">
+              <input
+                type="password"
+                id="confirmPassword"
+                name="confirm_password"
+                required
+              />
+              <button
+                type="button"
+                class="eye-icon"
+                id="toggleConfirmPassword"
+                aria-label="Toggle confirm password visibility"
+              >
+                🔒
+              </button>
+            </div>
+          </div>
+
+          <p id="passwordError">Passwords do not match</p>
+
+          <button type="submit" class="btn" id="submitBtn" disabled>
+            สร้างบัญชี
+          </button>
+        </form>
+
+        <footer class="card-foot">
+          มีบัญชีอยู่แล้วใช่ไหม?
+          <a href="login.html">เข้าสู่ระบบที่นี่</a>
+        </footer>
+      </section>
+    </main>
+
+    <script src="../menubar/menubar-class.js" defer></script>
+    <script src="../config.js"></script>
+    <script src="particles-config.js"></script>
+    <script src="singup.js"></script>
+  </body>
+</html>

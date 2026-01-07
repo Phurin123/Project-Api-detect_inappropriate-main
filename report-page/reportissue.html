@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>รายงานปัญหา</title>
+    <!-- เชื่อมโยงไฟล์ CSS -->
+    <link rel="stylesheet" href="../menubar/menubar.css" />
+    <link rel="stylesheet" href="reportstyles.css" />
+    <script src="../menubar/menubar-class.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+    <script src="../homepage/partcles-html.js" defer></script>
+    <link rel="stylesheet" href="../homepage/partcles-css.css" />
+  </head>
+  <body class="body_reportissue">
+    <div id="menubar"></div>
+    <div id="particles-js"></div>
+
+    <div class="container">
+      <h1>รายงานปัญหา</h1>
+      <p>เลือกประเภทปัญหาที่พบ:</p>
+
+      <!-- Dropdown for selecting problem type -->
+      <select id="problemSelect" onchange="showReportForm()">
+        <option value="" selected disabled hidden>เลือกประเภทปัญหา</option>
+        <option value="website">ปัญหาการใช้งาน หน้าเว็ปไซต์</option>
+        <option value="image">ปัญหาการใช้งาน การตรวจสอบภาพ</option>
+        <option value="other">ปัญหาการใช้งาน อื่นๆ</option></select
+      ><br /><br />
+
+      <!-- Report form -->
+      <div id="reportForm" class="report-form">
+        <h3>กรุณาเขียนรายงานปัญหาของคุณ:</h3>
+        <textarea
+          id="problemDescription"
+          rows="4"
+          placeholder="กรุณาระบุรายละเอียดปัญหาของคุณ"
+        ></textarea
+        ><br /><br />
+        <button onclick="submitReport()">ส่งรายงาน</button>
+      </div>
+    </div>
+
+    <!-- เชื่อมโยงไฟล์ JavaScript -->
+    <script src="../config.js"></script>
+    <script src="report-config.js"></script>
+  </body>
+</html>

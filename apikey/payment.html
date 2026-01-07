@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment</title>
+  <link rel="stylesheet" href="payment.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.omise.co/omise.js"></script>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Payment Required</h1>
+    <p>Amount to pay: <span id="amount"></span> Baht</p>
+    <p>Please scan the QR code below to complete the payment.</p>
+
+    <!-- QR Code Image -->
+    <img id="qrCodeImage" src="" alt="QR Code" style="width: 300px; height: auto" />
+
+    <!-- ✅ เพิ่มบรรทัดนี้: สถานะการชำระเงิน -->
+    <p id="paymentStatus" style="color: #2ecc71; font-weight: bold; margin: 10px 0"></p>
+
+    <!-- ตัวนับเวลาถอยหลัง -->
+    <p>
+      <strong>เหลือเวลา:</strong>
+      <span id="countdown" style="color: #d9534f; font-weight: bold">5:00</span>
+    </p>
+
+    <!-- คำเตือน -->
+    <p style="color: red; font-weight: bold">
+      * กรุณาจ่ายเงินภายใน 5 นาที
+      หากเกินเวลาระบบจะยกเลิกคำสั่งซื้อโดยอัตโนมัติ
+    </p>
+
+    <!-- ปุ่มแจ้งว่าชำระเงินแล้ว -->
+    <button id="confirmPaymentBtn" disabled>
+      ฉันได้ชำระเงินแล้ว
+    </button>
+    <p id="confirmationHint" style="font-size: 0.9rem; color: #95a5a6; margin-top: 6px">
+      ระบบจะเปิดปุ่มหลังจากสร้างคำสั่งซื้อและเริ่มนับเวลา
+    </p>
+  </div>
+  <script src="../config.js"></script>
+  <script src="payment.js"></script>
+</body>
+
+</html>

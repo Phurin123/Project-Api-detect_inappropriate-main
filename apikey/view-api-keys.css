@@ -1,0 +1,324 @@
+/* กำหนดฟอนต์ทั่วทั้งหน้า */
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(to right, #1e1e1e, #2c3e50);
+  color: #ecf0f1;
+}
+
+/* คอนเทนเนอร์หลัก */
+.container {
+  width: 70%;
+  max-width: 1000px;
+  margin: 50px auto;
+  background-color: transparent;
+  border-radius: 12px;
+  border: none;
+  box-shadow: none;
+  font-size: 16px;
+}
+
+/* หัวข้อ */
+h2 {
+  text-align: center;
+  color: #3498db;
+  font-size: 2rem;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+/* สไตล์สำหรับแต่ละบล็อค API Key */
+.api-key {
+  background-color: #34495e;
+  border: 2px solid #3498db;
+  margin-bottom: 20px;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.api-key:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+}
+
+/* การจัดระเบียบข้อมูลภายในบล็อค */
+.api-key p {
+  margin: 12px 0;
+  color: #ecf0f1;
+  font-size: 1rem;
+}
+
+/* การตั้งค่าสำหรับข้อความที่เป็นตัวหนา */
+.api-key strong {
+  color: #3498db;
+  font-weight: 500;
+}
+
+.api-key__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  padding-bottom: 12px;
+}
+
+.api-key__summary-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  flex: 1;
+}
+
+.api-key__summary-field {
+  margin: 0;
+  min-width: 200px;
+}
+
+.api-key__details {
+  display: none;
+  margin-top: 16px;
+}
+
+.api-key__details.open {
+  display: block;
+}
+
+.api-key__details-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px 18px;
+  margin-bottom: 20px;
+}
+
+.api-key__details-content p {
+  margin: 0;
+}
+
+/* การเลื่อนข้อมูลเมื่อมีหลายบล็อค */
+#apiKeysList {
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #3498db transparent;
+}
+
+#apiKeysList::-webkit-scrollbar {
+  width: 8px;
+}
+
+#apiKeysList::-webkit-scrollbar-thumb {
+  background-color: #3498db;
+  border-radius: 4px;
+}
+
+#apiKeysList::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+/* ปรับให้แต่ละ API Key มีพื้นที่ระหว่างกัน */
+.api-key:not(:last-child) {
+  margin-bottom: 20px;
+}
+
+/* ปุ่มที่ใช้งาน */
+button {
+  padding: 12px 25px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+button:hover {
+  background-color: #1abc9c;
+  transform: translateY(-2px);
+}
+
+.api-key-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  background-color: rgba(52, 152, 219, 0.15);
+  border: 1px solid rgba(52, 152, 219, 0.8);
+  box-shadow: none;
+  padding: 10px 18px;
+}
+
+.api-key-toggle:hover {
+  background-color: rgba(26, 188, 156, 0.2);
+  transform: none;
+}
+
+/* สไตล์ของข้อความส่วนต่างๆ */
+h3 {
+  color: #ecf0f1;
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+}
+
+h4 {
+  color: #ecf0f1;
+  font-size: 1.1rem;
+  margin-bottom: 5px;
+}
+
+.history-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.history-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background-color: rgba(52, 152, 219, 0.15);
+  border: 1px solid rgba(52, 152, 219, 0.8);
+  border-radius: 8px;
+  padding: 12px 18px;
+}
+
+.history-toggle-label {
+  flex: 1;
+  text-align: left;
+}
+
+.history-toggle:hover {
+  background-color: rgba(26, 188, 156, 0.2);
+}
+
+.history-toggle-icon {
+  font-size: 1.2rem;
+}
+
+.history-list {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease;
+  margin-top: 0;
+  padding: 0;
+}
+
+.history-list.open {
+  margin-top: 16px;
+  padding-top: 8px;
+}
+
+.history-entry {
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 2px solid #3498db;
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.history-entry p {
+  margin: 10px 0;
+  color: #ecf0f1;
+  font-size: 0.95rem;
+}
+
+.history-actions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.history-actions a {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.history-actions a:hover {
+  text-decoration: underline;
+}
+
+.history-empty {
+  color: #bdc3c7;
+  text-align: center;
+  margin: 0;
+  padding: 12px 0;
+}
+
+.api-key--orphan {
+  border-style: dashed;
+}
+
+.orphan-note {
+  font-size: 0.9rem;
+  color: #f1c40f;
+  margin-bottom: 0;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background-color: #6c757d;
+}
+
+.status-badge.status-passed {
+  background-color: #28a745;
+}
+
+.status-badge.status-failed {
+  background-color: #dc3545;
+}
+
+.status-badge.status-error {
+  background-color: #ffc107;
+  color: #333;
+}
+
+#usernameDisplay {
+  color: #ecf0f1 !important;
+  text-align: center;
+  font-weight: bold;
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+/* Copy Button Style */
+.copy-btn {
+    background: transparent !important;
+    border: none !important;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 0 5px !important;
+    margin-left: 8px;
+    box-shadow: none !important;
+    vertical-align: middle;
+    transition: transform 0.2s ease;
+}
+
+.copy-btn:hover {
+    transform: scale(1.2) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.expired-label {
+    display: inline-block;
+    padding: 5px 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    font-size: 0.9em;
+}

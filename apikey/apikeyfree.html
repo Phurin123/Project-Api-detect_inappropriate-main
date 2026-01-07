@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generate API Key</title>
+  <link rel="stylesheet" href="apikey.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+  <script src="https://cdn.omise.co/omise.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+  <script src="../homepage/partcles-html.js" defer></script>
+</head>
+
+<body>
+  <div id="particles-js"></div>
+  <div class="container">
+    <h1>Test Plan</h1>
+
+    <!-- ✅ Detection Options (Left Column) -->
+    <div class="section">
+      <h2>Select Detection Options</h2>
+      <div class="options">
+        <label>
+          <input type="checkbox" value="porn" class="analysis-option" />
+          <i class="fas fa-user-secret"></i> Nudity
+          <label for="porn-threshold">Threshold:</label>
+          <div class="slider-container">
+            <span id="porn-threshold-value" class="slider-value">0.50</span>
+            <input type="range" id="porn-threshold" min="0" max="1" step="0.01" value="0.5"
+              oninput="updateThresholdValue('porn')" />
+          </div>
+        </label>
+
+        <label>
+          <input type="checkbox" value="cigarette" class="analysis-option" />
+          <i class="fas fa-smoking"></i> Smoking
+          <label for="cigarette-threshold">Threshold:</label>
+          <div class="slider-container">
+            <span id="cigarette-threshold-value" class="slider-value">0.50</span>
+            <input type="range" id="cigarette-threshold" min="0" max="1" step="0.01" value="0.5"
+              oninput="updateThresholdValue('cigarette')" />
+          </div>
+        </label>
+
+        <label>
+          <input type="checkbox" value="weapon" class="analysis-option" />
+          <i class="fas fa-gun"></i> Weapon
+          <label for="weapon-threshold">Threshold:</label>
+          <div class="slider-container">
+            <span id="weapon-threshold-value" class="slider-value">0.50</span>
+            <input type="range" id="weapon-threshold" min="0" max="1" step="0.01" value="0.5"
+              oninput="updateThresholdValue('weapon')" />
+          </div>
+        </label>
+
+        <label>
+          <input type="checkbox" value="violence" class="analysis-option" />
+          <i class="fas fa-fist-raised"></i> Violence
+          <label for="violence-threshold">Threshold:</label>
+          <div class="slider-container">
+            <span id="violence-threshold-value" class="slider-value">0.50</span>
+            <input type="range" id="violence-threshold" min="0" max="1" step="0.01" value="0.5"
+              oninput="updateThresholdValue('violence')" />
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- ✅ Plan & Quota + Output Mode (Right Column) -->
+    <div class="section">
+      <!-- Output Mode (Moved Below Plan) -->
+      <h2 style="margin-top: 40px;">Output Mode</h2>
+      <label><input type="checkbox" class="output-option" value="blur"> ภาพ Blur</label>
+      <label><input type="checkbox" class="output-option" value="bbox"> ภาพ Bounding Box</label>
+
+      <!-- ✅ Upload Limit แยกเป็นบล็อก -->
+      <div style="margin-top: 40px;">
+        <h2>Key expired</h2>
+        <p>Upload Access: 7 Days</p>
+      </div>
+
+      <!-- Generate Button -->
+      <button class="view-btn" onclick="generateApiKey()" style="margin-top: 10px;">Generate Key</button>
+
+    </div>
+  </div>
+  <script src="../config.js"></script>
+  <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+  <script src="apikeyfree.js"></script>
+</body>
+
+</html>

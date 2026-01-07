@@ -1,0 +1,66 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Prompt", sans-serif;
+  background: linear-gradient(to right, #1e1e1e, #2c3e50);
+  text-align: center;
+  color: #ecf0f1; /* Match report page text color */
+}
+h1 {
+  text-align: center;
+  color: #3498db;
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.p-head {
+  text-align: center;
+  color: #3498db;
+  -webkit-text-stroke: 0.5px #042f4c; /* ขอบสีดำ หนา 1px */
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.header {
+  margin-top: 40px;
+}
+
+.description {
+  margin: 40px auto;
+  max-width: 700px;
+  background: #34495e; /* Match report page container */
+  padding: 25px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 2px solid #3498db; /* Match report page border color */
+  text-align: left;
+}
+
+.description h2 {
+  font-size: 1.5rem;
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: #ecf0f1;
+}
+
+.description p,
+.description li {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.description ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+#particles-js {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  top: 0;
+  left: 0;
+}

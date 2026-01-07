@@ -1,0 +1,92 @@
+<!-- step2_otp.html -->
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8">
+  <title>กรอก OTP</title>
+  <link rel="stylesheet" href="../homepage/partcles-css.css" />
+  <link rel="stylesheet" href="reset.css" />
+  <style>
+    .countdown {
+      margin-top: 15px;
+      font-size: 16px;
+      color: #ffb3a7;
+      font-weight: bold;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+  <script src="../homepage/partcles-html.js" defer></script>
+</head>
+
+<body>
+  <div id="particles-js"></div>
+  <div class="reset-container">
+    <h2>ยืนยัน OTP</h2>
+    <form id="otpForm">
+      <div class="input-group">
+        <input type="text" id="otp" placeholder="กรอก OTP ที่ได้รับ" required />
+      </div>
+      <button type="submit">ยืนยัน</button>
+    </form>
+
+    <div class="countdown" id="countdown">เหลือเวลา: 05:00 นาที</div>
+    <div class="error-message" id="errorMessage"></div>
+    <div class="message">หากไม่ได้รับ OTP กรุณาตรวจสอบอีเมลของคุณอีกครั้ง</div>
+  </div>
+  <script src="../config.js"></script>
+  <script>
+    // จัดการฟอร์ม OTP
+    document.getElementById('otpForm').onsubmit = async function (e) {
+      e.preventDefault();
+      const otp = document.getElementById('otp').value;
+      const email = localStorage.getItem("email");
+      const errorMessage = document.getElementById("errorMessage");
+
+      try {
+        const res = await fetch(`${window.API_BASE_URL}/verify-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorMessage.textContent = data.detail || data.message || "เกิดข้อผิดพลาด";
+          errorMessage.classList.add("show");
+        } else {
+          errorMessage.classList.remove("show");
+          localStorage.setItem("otp", otp);
+          window.location.href = "resetpass.html";
+        }
+      } catch (err) {
+        errorMessage.textContent = "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้";
+        errorMessage.classList.add("show");
+      }
+    };
+
+    // ฟังก์ชันนับถอยหลัง 5 นาที
+    const countdownEl = document.getElementById("countdown");
+    let timeLeft = 300; // 5 นาที = 300 วินาที
+
+    const timer = setInterval(() => {
+      const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+      const seconds = (timeLeft % 60).toString().padStart(2, '0');
+      countdownEl.textContent = `เหลือเวลา: ${minutes}:${seconds} นาที`;
+
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        countdownEl.textContent = "OTP หมดอายุ กรุณาขอใหม่อีกครั้ง";
+        countdownEl.style.color = "#e53e3e";
+        document.getElementById('otpForm').querySelector('button').disabled = true;
+        document.getElementById('otp').disabled = true;
+      }
+
+      timeLeft--;
+    }, 1000);
+  </script>
+
+</body>
+
+</html>

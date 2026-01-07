@@ -1,0 +1,60 @@
+<!-- step1_email.html -->
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8">
+  <title>ลืมรหัสผ่าน - กรอก Gmail</title>
+  <link rel="stylesheet" href="../homepage/partcles-css.css" />
+  <link rel="stylesheet" href="reset.css" />
+  <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+  <script src="../homepage/partcles-html.js" defer></script>
+</head>
+
+<body>
+  <div id="particles-js"></div>
+  <div class="reset-container">
+    <h2>ลืมรหัสผ่าน</h2>
+    <form id="emailForm">
+      <div class="input-group">
+        <input type="text" id="email" placeholder="กรอก Gmail" required />
+      </div>
+      <button type="submit">ส่ง OTP</button>
+    </form>
+    <div class="error-message" id="errorMessage"></div>
+    <div class="message">ระบบจะส่ง OTP ไปยัง Gmail ที่คุณกรอก</div>
+  </div>
+  <script src="../config.js"></script>
+  <script>
+    document.getElementById('emailForm').onsubmit = async function (e) {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const errorMessage = document.getElementById("errorMessage");
+
+      try {
+        const res = await fetch(`${window.API_BASE_URL}/reset-request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorMessage.textContent = data.detail || data.message || "เกิดข้อผิดพลาด";
+          errorMessage.classList.add("show");
+        } else {
+          errorMessage.classList.remove("show");
+          localStorage.setItem("email", email);
+          window.location.href = "otp.html";
+        }
+      } catch (err) {
+        errorMessage.textContent = "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้";
+        errorMessage.classList.add("show");
+      }
+    };
+  </script>
+
+</body>
+
+</html>

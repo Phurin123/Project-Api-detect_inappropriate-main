@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ตั้งรหัสผ่านใหม่</title>
+  <link rel="stylesheet" href="../homepage/partcles-css.css">
+  <link rel="stylesheet" href="reset.css" />
+  <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+  <script src="../homepage/partcles-html.js" defer></script>
+</head>
+
+<body>
+  <div id="particles-js"></div>
+  <div class="reset-container">
+    <h2>ตั้งรหัสผ่านใหม่</h2>
+    <form id="resetForm">
+      <div class="input-group">
+        <input type="password" id="password" placeholder="รหัสผ่านใหม่" required />
+        <button type="button" class="toggle-password" id="togglePassword" style="display: none;">🔒</button>
+      </div>
+      <div class="input-group">
+        <input type="password" id="confirm" placeholder="ยืนยันรหัสผ่าน" required />
+        <button type="button" class="toggle-password" id="toggleConfirmPassword" style="display: none;">🔒</button>
+      </div>
+      <div id="passwordError" class="error-message">รหัสผ่านไม่ตรงกัน</div>
+      <div id="apiError" class="error-message"></div>
+      <button type="submit" id="submitBtn" disabled>รีเซ็ตรหัสผ่าน</button>
+    </form>
+  </div>
+  <script src="../config.js"></script>
+  <script>
+    // ฟังก์ชันแสดง/ซ่อนไอคอนรหัสผ่าน
+    function togglePasswordVisibility(inputId, buttonId) {
+      const passwordField = document.getElementById(inputId);
+      const button = document.getElementById(buttonId);
+      const type = passwordField.type === 'password' ? 'text' : 'password';
+      passwordField.type = type;
+      button.textContent = type === 'password' ? '🔒' : '👁️';
+    }
+
+    // การแสดง/ซ่อนไอคอนสำหรับรหัสผ่าน
+    document.getElementById('password').addEventListener('input', function () {
+      var passwordField = document.getElementById('password');
+      var eyeIcon = document.getElementById('togglePassword');
+      eyeIcon.style.display = passwordField.value ? 'block' : 'none'; // แสดง/ซ่อนไอคอน
+    });
+
+    // การแสดง/ซ่อนไอคอนสำหรับ Confirm Password
+    document.getElementById('confirm').addEventListener('input', function () {
+      var confirmPasswordField = document.getElementById('confirm');
+      var eyeIcon = document.getElementById('toggleConfirmPassword');
+      eyeIcon.style.display = confirmPasswordField.value ? 'block' : 'none'; // แสดง/ซ่อนไอคอน
+    });
+
+    // การคลิกเพื่อแสดง/ซ่อนรหัสผ่าน
+    document.getElementById('togglePassword').addEventListener('click', function () {
+      togglePasswordVisibility('password', 'togglePassword');
+    });
+
+    // การคลิกเพื่อแสดง/ซ่อนรหัสผ่านสำหรับ Confirm Password
+    document.getElementById('toggleConfirmPassword').addEventListener('click', function () {
+      togglePasswordVisibility('confirm', 'toggleConfirmPassword');
+    });
+
+    // ฟังก์ชันตรวจสอบรหัสผ่าน
+    function validatePasswords() {
+      var password = document.getElementById('password').value;
+      var confirmPassword = document.getElementById('confirm').value;
+      var errorText = document.getElementById('passwordError');
+      var submitButton = document.getElementById('submitBtn');
+
+      if (password !== confirmPassword) {
+        errorText.style.display = 'block'; // แสดงข้อความแจ้งเตือน
+        submitButton.disabled = true; // ปิดปุ่มรีเซ็ตรหัสผ่าน
+      } else {
+        errorText.style.display = 'none'; // ซ่อนข้อความแจ้งเตือน
+        submitButton.disabled = false; // เปิดปุ่มรีเซ็ตรหัสผ่าน
+      }
+    }
+
+    // ตรวจสอบทุกครั้งที่พิมพ์รหัสผ่าน
+    document.getElementById('password').addEventListener('input', validatePasswords);
+    document.getElementById('confirm').addEventListener('input', validatePasswords);
+
+    // จัดการฟอร์มรีเซ็ตรหัสผ่าน
+    document.getElementById('resetForm').onsubmit = async function (e) {
+      e.preventDefault();
+      const password = document.getElementById('password').value;
+      const confirm_password = document.getElementById('confirm').value;
+      const email = localStorage.getItem("email");
+      const otp = localStorage.getItem("otp");
+
+      // ตรวจสอบว่า password กับ confirm_password ตรงกันหรือไม่
+      if (password !== confirm_password) {
+        document.getElementById('passwordError').style.display = 'block';
+        return; // ออกจากฟังก์ชันหากรหัสผ่านไม่ตรงกัน
+      }
+
+      // ส่งคำขอรีเซ็ตรหัสผ่าน
+      try {
+        const res = await fetch(`${window.API_BASE_URL}/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp, password, confirm_password })
+        });
+
+        const data = await res.json();
+        const apiError = document.getElementById('apiError');
+
+        if (!res.ok) {
+          apiError.textContent = data.detail || data.message || "เกิดข้อผิดพลาด";
+          apiError.style.display = 'block';
+        } else {
+          apiError.style.display = 'none';
+          alert(data.message);
+          localStorage.clear();
+          window.location.href = "../login-singup/login.html"; // เปลี่ยนตาม URL หน้าล็อกอินของคุณ
+        }
+      } catch (err) {
+        const apiError = document.getElementById('apiError');
+        apiError.textContent = "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้";
+        apiError.style.display = 'block';
+      }
+    }
+  </script>
+
+</body>
+
+</html>

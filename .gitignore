@@ -1,0 +1,23 @@
+# ละเว้นไฟล์เดียวที่ระบุชื่อ
+secret.txt
+config.json
+ 
+# ละเว้นทั้งโฟลเดอร์ (ใส่ / ไว้ข้างหลัง)
+node_modules/
+dist/
+temp/
+models/
+venv/
+__pycache__/
+.env
+*.pyc
+ 
+# ละเว้นไฟล์ตามนามสกุล (เช่น ไฟล์ log ทั้งหมด หรือไฟล์ที่ติด Rule)
+*.log
+*.env
+*.exe
+ 
+# ละเว้นไฟล์ทั้งหมดในโฟลเดอร์หนึ่ง ยกเว้นบางไฟล์
+private/*.txt
+!private/readme.txt
+ 

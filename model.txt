@@ -1,0 +1,151 @@
+import json
+import os
+import cv2
+import gradio as gr
+import numpy as np
+from PIL import Image
+from ultralytics import YOLO
+import concurrent.futures
+import threading
+import time
+
+# สร้างโฟลเดอร์ 'uploads' หากยังไม่มี
+uploads_folder = 'uploads'
+if not os.path.exists(uploads_folder):
+    os.makedirs(uploads_folder)
+
+def delete_uploaded_files():
+    """ ลบไฟล์ในโฟลเดอร์ 'uploads' หลังจากเวลา 10 วินาที """
+    time.sleep(10)  # หน่วงเวลา 10 วินาที
+    for filename in os.listdir(uploads_folder):
+        file_path = os.path.join(uploads_folder, filename)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+            print(f"Deleted file: {file_path}")
+
+# ใช้ Thread เพื่อให้การลบไฟล์ทำงานเป็น background
+def delete_files_in_background():
+    threading.Thread(target=delete_uploaded_files, daemon=True).start()
+
+# โหลดโมเดล
+def load_model(model_name):
+    return YOLO(os.path.join('models', model_name))
+
+models = {
+    "porn": load_model('best-porn.pt'),
+    "weapon": load_model('best-weapon.pt'),
+    "cigarette": load_model('best-cigarette.pt'),
+    "violence": load_model('best-violence.pt')
+}
+
+# วิเคราะห์ภาพจาก NumPy array
+def analyze_model_np(image_np, model, threshold):
+    # เพิ่ม device='cuda' ถ้าใช้ GPU
+    results = model.predict(source=image_np, imgsz=640, device='cpu', conf=threshold, verbose=False, save=False, stream=False)
+    detections = []
+    for result in results:
+        if not hasattr(result, 'boxes') or result.boxes is None:
+            continue
+        for box in result.boxes:
+            confidence = float(box.conf)
+            if confidence >= threshold:
+                label_name = model.names[int(box.cls)].lower()
+                x1, y1, x2, y2 = box.xyxy[0]
+                bbox = [round(float(coord), 2) for coord in [x1, y1, x2, y2]]
+                detections.append({
+                    "label": label_name,
+                    "confidence": round(confidence, 4),
+                    "bbox": bbox
+                })
+    return detections
+
+# วาดกรอบ bounding box
+def draw_bounding_boxes_from_array(image_np, detections):
+    for detection in detections:
+        x1, y1, x2, y2 = map(int, detection["bbox"])
+        label = detection["label"]
+        confidence = detection["confidence"]
+
+        image_height, image_width = image_np.shape[:2]
+        x1 = max(0, min(x1, image_width - 1))
+        y1 = max(0, min(y1, image_height - 1))
+        x2 = max(0, min(x2, image_width - 1))
+        y2 = max(0, min(y2, image_height - 1))
+
+        cv2.rectangle(image_np, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        text = f"{label} ({confidence:.2f})"
+        text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
+        cv2.rectangle(image_np, (x1, y1 - text_size[1] - 10),
+                      (x1 + text_size[0], y1), (0, 255, 0), -1)
+        cv2.putText(image_np, text, (x1, y1 - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+    return Image.fromarray(cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB))
+
+# เบลอเฉพาะส่วนที่ตรวจจับเจอ
+def blur_detected_areas(image_np, detections, blur_ksize=(51, 51)):
+    blurred_image = image_np.copy()
+    for detection in detections:
+        x1, y1, x2, y2 = map(int, detection["bbox"])
+        h, w = blurred_image.shape[:2]
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w-1, x2), min(h-1, y2)
+        roi = blurred_image[y1:y2, x1:x2]
+        if roi.size == 0:
+            continue
+        roi_blurred = cv2.GaussianBlur(roi, blur_ksize, 0)
+        blurred_image[y1:y2, x1:x2] = roi_blurred
+    return Image.fromarray(cv2.cvtColor(blurred_image, cv2.COLOR_BGR2RGB))
+
+# ประมวลผลหลายโมเดลพร้อมกัน และคืนภาพ 2 แบบ + JSON
+def process_selected_models(image, model_types, thresholds):
+    image_np = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+    def run_model(model_type):
+        model = models[model_type]
+        threshold = thresholds.get(model_type, 0.5)
+        return model_type, analyze_model_np(image_np, model, threshold)
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(run_model, m) for m in model_types]
+        results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+    all_detections = []
+    for model_type, detections in results:
+        for d in detections:
+            d['model_type'] = model_type
+        all_detections.extend(detections)
+
+    output_image_bbox = draw_bounding_boxes_from_array(image_np.copy(), all_detections)
+    output_image_blur = blur_detected_areas(image_np.copy(), all_detections)
+    json_data = json.dumps(all_detections, indent=4, ensure_ascii=False)
+
+    return output_image_bbox, output_image_blur, json_data
+
+# สร้าง Gradio Interface
+interface = gr.Interface(
+    fn=process_selected_models,
+    inputs=[
+        gr.Image(type="pil", label="อัปโหลดภาพ"),
+        gr.CheckboxGroup(
+            choices=list(models.keys()),
+            label="เลือกประเภทที่ต้องการตรวจจับ",
+            value=list(models.keys())
+        ),
+        gr.JSON(label="กำหนด Thresholds", value={
+            "porn": 0.5,
+            "weapon": 0.5,
+            "cigarette": 0.5,
+            "violence": 0.5
+        })
+    ],
+    outputs=[
+        gr.Image(type="pil", label="ภาพพร้อมกรอบ bounding box"),
+        gr.Image(type="pil", label="ภาพเบลอส่วนที่ตรวจจับเจอ"),
+        gr.Textbox(label="ผลลัพธ์ JSON", lines=20, interactive=False)
+    ],
+    title="YOLO Image Content Detector",
+    description="เลือกโมเดลที่ต้องการตรวจจับจากรายการด้านล่าง"
+)
+
+if __name__ == "__main__":
+    interface.launch()

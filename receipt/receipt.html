@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>อัปโหลดสลิปการชำระเงิน</title>
+  <link rel="stylesheet" href="receipt.css">
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div class="container">
+    <h2>อัปโหลดสลิปการชำระเงิน</h2>
+
+    <!-- แถบเตือนคงที่เพื่อให้ข้อความภาษาไทยชัดเจนขณะอัปโหลด -->
+    <div id="uploadWarning"
+      style="display:none; background:#ffcdcd; color:#b50707; padding:8px; text-align:center; font-weight:600;">
+      ⚠️ กรุณารอจนกว่าการอัปโหลดจะเสร็จ — การปิดหรือรีโหลดหน้านี้จะยกเลิกการอัปโหลดสลิป
+    </div>
+
+    <p>
+      <strong>เหลือเวลาอัปโหลดสลิป:</strong>
+      <span id="countdown" style="color: #d9534f; font-weight: bold">5:00</span>
+    </p>
+
+    <label for="receiptImage">เลือกภาพสลิป:</label>
+    <input type="file" id="receiptImage" accept="image/*" />
+
+    <button id="uploadBtn">อัปโหลด และตรวจสอบ</button>
+
+    <div class="spinner"></div>
+    <p id="uploadStatus"></p>
+
+    <h2>API Key ของคุณ</h2>
+    <p id="api_key" style="color: #2ecc71; font-weight: bold;"></p>
+    <button id="returnToPaymentBtn" style="display:none; margin-top: 8px;">
+      กลับไปหน้าสร้าง API Key
+    </button>
+    <script src="../config.js"></script>
+    <script src="receipt.js"></script>
+</body>
+
+</html>

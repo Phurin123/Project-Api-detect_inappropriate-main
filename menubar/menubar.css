@@ -1,0 +1,484 @@
+/* Shared navbar styling */
+:root {
+  --nav-height: 80px;
+  --nav-bg: rgba(15, 18, 35, 0.84);
+  --nav-border: rgba(255, 255, 255, 0.1);
+  --nav-text: #ffffff;
+  --nav-muted: #ffffff;
+  --brand-gradient: linear-gradient(135deg, #5c6cff, #8a4dff);
+  --action-primary: #5c6cff;
+  --action-primary-hover: #4656d6;
+  --action-ghost-hover: rgba(255, 255, 255, 0.12);
+  --dropdown-bg: #111526;
+  --dropdown-border: rgba(255, 255, 255, 0.08);
+  --dropdown-hover: rgba(92, 108, 255, 0.12);
+  /* standardize nav-toggle sizing for consistent burger icons across pages */
+  --nav-toggle-size: 44px; /* outer touch area */
+  --nav-toggle-bar-width: 22px; /* width of each bar */
+  --nav-toggle-bar-height: 2px; /* thickness of bar */
+  --nav-toggle-gap: 6px; /* gap between bars */
+  color-scheme: dark;
+}
+
+body.has-fixed-nav {
+  padding-top: var(--nav-height);
+}
+
+/* ensure pages with the fixed menubar are pushed down so content is not overlapped */
+body.has-fixed-nav,
+html.has-fixed-nav {
+  padding-top: var(--nav-height) !important;
+}
+
+.primary-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1100;
+  background: var(--nav-bg);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--nav-border);
+  font-family: "Poppins", "Sarabun", system-ui, -apple-system, sans-serif;
+}
+
+.primary-nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(140, 67, 255, 0.32),
+    rgba(92, 108, 255, 0.16),
+    rgba(10, 18, 46, 0.32)
+  );
+  opacity: 0.28;
+  mix-blend-mode: lighten;
+}
+
+.nav-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  min-height: var(--nav-height);
+}
+
+.nav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--nav-text);
+  font-weight: 600;
+  font-size: 1.2rem;
+}
+
+.brand-mark {
+  letter-spacing: 0.03em;
+}
+
+.brand-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  background: var(--brand-gradient);
+  color: #fff;
+  border-radius: 999px;
+  letter-spacing: 0.1em;
+}
+
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 8px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+/* Ensure the toggle is always visible and consistently styled (covers different HTML structures) */
+.nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--nav-toggle-size);
+  height: var(--nav-toggle-size);
+  padding: 6px;
+  gap: 0;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  color: var(--nav-text);
+  transition: background 0.18s ease, border-color 0.18s ease,
+    transform 0.18s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nav-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-toggle-bar {
+  width: 20px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--nav-text);
+  display: block;
+}
+
+/* Common selectors to catch different markup patterns:
+   - .nav-toggle-bar (existing class)
+   - direct children (span/i) used as bars
+   - svg fallback */
+.nav-toggle .nav-toggle-bar,
+.nav-toggle > span,
+.nav-toggle > i {
+  display: block;
+  width: var(--nav-toggle-bar-width);
+  height: var(--nav-toggle-bar-height);
+  background: currentColor;
+  border-radius: 999px;
+  transition: transform 0.22s ease, opacity 0.18s ease;
+  margin: calc(var(--nav-toggle-gap) / 2) 0;
+  box-sizing: border-box;
+}
+
+/* If markup uses a single element (svg) as icon, ensure it scales & matches color */
+.nav-toggle svg {
+  width: calc(var(--nav-toggle-bar-width) + 2px);
+  height: calc(var(--nav-toggle-bar-width) + 2px);
+  fill: currentColor;
+}
+
+/* Animation: when menu is expanded turn burger into X (works for 3 child elements) */
+.nav-toggle[aria-expanded="true"] > *:nth-child(1) {
+  transform: translateY(calc(var(--nav-toggle-gap))) rotate(45deg);
+}
+.nav-toggle[aria-expanded="true"] > *:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+.nav-toggle[aria-expanded="true"] > *:nth-child(3) {
+  transform: translateY(calc(-1 * var(--nav-toggle-gap))) rotate(-45deg);
+}
+
+/* If the page uses .nav-toggle-bar single element approach, provide a graceful transition using class */
+.nav-toggle.nav-toggle--bars .nav-toggle-bar {
+  position: relative;
+}
+.nav-toggle.nav-toggle--bars[aria-expanded="true"] .nav-toggle-bar {
+  /* hide middle bar if implemented as pseudo-elements; this is a best-effort fallback */
+  opacity: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.nav-links-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.nav-links {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-item {
+  position: relative;
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  color: var(--nav-muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.nav-link:hover,
+.nav-link:focus-visible {
+  color: var(--nav-text);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+.nav-link--button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.nav-chevron {
+  border: solid var(--nav-muted);
+  border-width: 0 2px 2px 0;
+  display: inline-block;
+  padding: 3px;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+  margin-inline-start: 4px;
+}
+
+.nav-item--dropdown[aria-expanded="true"] .nav-chevron,
+.nav-link[aria-expanded="true"] .nav-chevron {
+  transform: rotate(-135deg);
+}
+
+.nav-dropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  min-width: 240px;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 24px 40px rgba(7, 10, 25, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+}
+
+.nav-dropdown--wide {
+  min-width: 260px;
+}
+
+.nav-item--dropdown.open > .nav-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdown-item {
+  display: block;
+  padding: 12px;
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--nav-text);
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.dropdown-item + .dropdown-item {
+  margin-top: 6px;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus-visible {
+  background: var(--dropdown-hover);
+  transform: translateX(2px);
+}
+
+.dropdown-title {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.dropdown-desc {
+  color: var(--nav-muted);
+  font-size: 0.83rem;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: 1px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.nav-action--primary {
+  background: var(--action-primary);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(92, 108, 255, 0.32);
+}
+
+.nav-action--primary:hover,
+.nav-action--primary:focus-visible {
+  background: var(--action-primary-hover);
+  transform: translateY(-1px);
+}
+
+.nav-action--ghost {
+  background: transparent;
+  color: var(--nav-text);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-action--ghost:hover,
+.nav-action--ghost:focus-visible {
+  background: var(--action-ghost-hover);
+}
+
+/* Help mobile browsers respect device width and avoid auto-scaling */
+@-ms-viewport {
+  width: device-width;
+}
+@viewport {
+  width: device-width;
+}
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+}
+
+/* Make mobile rules more authoritative so media queries apply even if meta viewport missing */
+@media (max-device-width: 960px), (max-width: 960px) {
+  /* ensure nav-toggle always visible on small devices */
+  .nav-toggle {
+    display: inline-flex !important;
+  }
+
+  /* force collapsed links wrapper to behave as mobile panel */
+  .nav-links-wrapper {
+    position: absolute !important;
+    top: calc(100% + 12px) !important;
+    right: 16px !important;
+    left: 16px !important;
+    flex-direction: column !important;
+    background: rgba(12, 15, 32, 0.98) !important;
+    border: 1px solid var(--nav-border) !important;
+    padding: 14px !important;
+    border-radius: 14px !important;
+    transform: translateY(10px) !important;
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .nav-links-wrapper.open {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translateY(0) !important;
+  }
+
+  .nav-links {
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+
+  .nav-action,
+  .nav-link {
+    width: 100% !important;
+  }
+}
+
+/* Fix bootstrap shrinking menubar */
+.primary-nav,
+.primary-nav * {
+  box-sizing: content-box !important;
+}
+
+/* Keep original height of menubar */
+.primary-nav {
+  height: 70px !important;
+  min-height: 70px !important;
+}
+
+.nav-inner {
+  min-height: 70px !important;
+}
+
+/* Make nav height adapt to smaller screens to avoid large top padding */
+:root {
+  --nav-height: 80px; /* desktop default */
+}
+
+@media (max-width: 960px) {
+  :root {
+    --nav-height: 64px; /* tablet / mobile slightly smaller */
+  }
+}
+
+/* Ensure pages with the fixed menubar are pushed down */
+body.has-fixed-nav,
+html.has-fixed-nav {
+  padding-top: var(--nav-height) !important;
+}
+
+/* Make nav-inner spacing adapt */
+.nav-inner {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* Improve toggle hit area and ensure nav-toggle visible on small screens */
+.nav-toggle {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Slightly smaller nav-brand on very small screens */
+@media (max-width: 480px) {
+  .nav-brand {
+    font-size: 1rem;
+  }
+  .nav-inner {
+    padding-left: 12px;
+    padding-right: 12px;
+    min-height: var(--nav-height);
+  }
+}
+
+/* Ensure desktop hides burger and only show on smaller screens.
+   This overrides earlier unconditional rules that made .nav-toggle visible. */
+.nav-toggle {
+  display: none !important;
+}
+
+/* Mobile / tablet — show burger */
+@media (max-width: 960px) {
+  .nav-toggle {
+    display: inline-flex !important;
+  }
+}

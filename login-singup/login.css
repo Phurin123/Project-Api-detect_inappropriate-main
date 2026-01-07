@@ -1,0 +1,537 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;500;600;700&display=swap");
+
+* {
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+
+/* Dog face color variables (used only for face-related parts) */
+:root {
+  --dog-blue: #3498db;
+  --dog-blue-dark: #2c3e50;
+  --dog-blue-contrast: #2c6ea8;
+}
+
+body {
+  margin: 0;
+  width: 100%;
+  min-height: 100vh;
+  background-color: #1e1e1e;
+  color: #ecf0f1;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.container {
+  width: 90%;
+  /* กว้าง 90% ของหน้าจอ */
+  margin: 0 auto;
+  position: relative;
+  display: block;
+  width: 100%;
+  /* Keep the login card within the viewport by subtracting the fixed menubar height */
+  min-height: calc(100vh - var(--nav-height, 0px));
+  border-radius: 3px;
+  overflow: hidden;
+  background-image: linear-gradient(to top right,
+      rgba(111, 132, 168, 0.92),
+      rgba(60, 83, 107, 0.92));
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.45);
+}
+
+.container .ear {
+  position: absolute;
+  top: -110px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background-color: var(--dog-blue-dark);
+}
+
+.container .ear.ear--left {
+  left: -135px;
+}
+
+.container .ear.ear--right {
+  right: -135px;
+}
+
+.container .face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 200px;
+  height: 150px;
+  margin: 80px auto 10px;
+  --rotate-head: 0deg;
+  transform: rotate(var(--rotate-head));
+  transition: transform 0.2s;
+  transform-origin: center 20px;
+}
+
+.container .eye {
+  display: inline-block;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background-color: var(--dog-blue-dark);
+}
+
+.container .eye.eye--left {
+  margin-right: 40px;
+}
+
+.container .eye.eye--right {
+  margin-left: 40px;
+}
+
+.container .eye .glow {
+  position: relative;
+  top: 3px;
+  right: -12px;
+  width: 12px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #fff;
+  transform: rotate(38deg);
+}
+
+.container .nose {
+  position: relative;
+  top: 30px;
+  transform: scale(1.1);
+}
+
+.container .nose .glow {
+  position: absolute;
+  top: 3px;
+  left: 32%;
+  width: 15px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #0021c5;
+}
+
+.container .mouth {
+  position: relative;
+  margin-top: 45px;
+}
+
+.container svg.smile {
+  position: absolute;
+  left: -28px;
+  top: -19px;
+  transform: scaleX(1.1);
+  stroke: var(--dog-blue-dark);
+}
+
+.container .mouth-hole {
+  position: absolute;
+  top: 0;
+  left: -50%;
+  width: 60px;
+  height: 15px;
+  border-radius: 50%/100% 100% 0% 0;
+  transform: rotate(180deg);
+  background-color: var(--dog-blue-dark);
+  z-index: -1;
+}
+
+.container .tongue {
+  position: relative;
+  top: 5px;
+  width: 30px;
+  height: 20px;
+  background-color: #ffd7dd;
+  transform-origin: top;
+  transform: rotateX(60deg);
+}
+
+.container .tongue.breath {
+  -webkit-animation: breath 0.3s infinite linear;
+  animation: breath 0.3s infinite linear;
+}
+
+.container .tongue-top {
+  position: absolute;
+  bottom: -15px;
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  background-color: #ffd7dd;
+}
+
+.container .line {
+  position: absolute;
+  top: 0;
+  width: 30px;
+  height: 5px;
+  background-color: #fcb7bf;
+}
+
+.container .median {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 25px;
+  border-radius: 5px;
+  background-color: #fcb7bf;
+}
+
+.container .hands {
+  position: relative;
+}
+
+.container .hands .hand {
+  position: absolute;
+  top: -3px;
+  display: flex;
+  transition: transform 0.5s ease-in-out;
+  z-index: 1;
+}
+
+.container .hands .hand--left {
+  left: -85px;
+}
+
+.container .hands .hand--left.hide {
+  transform: translate(2px, -155px) rotate(-160deg);
+}
+
+.container .hands .hand--left.peek {
+  transform: translate(0px, -120px) rotate(-160deg);
+}
+
+.container .hands .hand--right {
+  left: 30px;
+}
+
+.container .hands .hand--right.hide {
+  transform: translate(-6px, -155px) rotate(160deg);
+}
+
+.container .hands .hand--right.peek {
+  transform: translate(-4px, -120px) rotate(160deg);
+}
+
+.container .hands .finger {
+  position: relative;
+  z-index: 0;
+}
+
+.container .hands .finger .bone {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #003d79;
+  border-bottom: none;
+  border-top: none;
+  background-color: var(--dog-blue-dark);
+}
+
+.container .hands .finger .nail {
+  position: absolute;
+  left: 0;
+  top: 10px;
+  width: 20px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #003d79;
+  background-color: var(--dog-blue-dark);
+  z-index: -1;
+}
+
+.container .hands .finger:nth-child(1),
+.container .hands .finger:nth-child(3) {
+  left: 4px;
+  z-index: 1;
+}
+
+.container .hands .finger:nth-child(1) .bone,
+.container .hands .finger:nth-child(3) .bone {
+  height: 10px;
+}
+
+.container .hands .finger:nth-child(3) {
+  left: -4px;
+}
+
+.container .hands .finger:nth-child(2) {
+  top: -5px;
+  z-index: 2;
+}
+
+.container .hands .finger:nth-child(1) .nail,
+.container .hands .finger:nth-child(3) .nail {
+  top: 0px;
+}
+
+.container .tengah {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.container .login {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  /* allow the form to grow/shrink */
+  max-width: 360px;
+  /* limit width on large screens */
+  margin: 0 auto;
+  /* center the form */
+}
+
+.container .login label {
+  position: relative;
+  display: flex;
+  /* align icon + input */
+  align-items: center;
+  width: 100%;
+  padding: 0.375rem 0.75rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #ecf0f1;
+  background-color: rgba(255, 255, 255, 0.08);
+  background-clip: padding-box;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  border-radius: 10px;
+  margin: 8px 0;
+  /* vertical spacing between fields */
+  gap: 8px;
+  /* space between icon and input */
+}
+
+.container .login label.label {
+  border: 2px solid #003d79;
+}
+
+.container .login label .fas {
+  position: absolute;
+  top: 32%;
+  left: 25px;
+  /* color: #bbb; */
+  font-size: 1.2rem;
+}
+
+.container .login label .fas:before {
+  position: relative;
+  left: 1px;
+}
+
+.container .login input,
+.container .login .login-button {
+  width: 100%;
+  /* ensure inputs take label width */
+  height: 35px;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  box-sizing: border-box;
+  /* include padding in width calculations */
+}
+
+/* .container .fa-user {
+  font-size: 1.3rem;
+} */
+.container .login input {
+  padding: 0 24px 0 10px;
+  /* default padding, overridden by specific classes below */
+  margin: 0;
+  /* spacing is handled by label margin */
+  box-shadow: none;
+  outline: none;
+  font-family: "Poppins", sans-serif;
+  font-size: 1rem;
+  color: #ecf0f1;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.container .login input::-moz-placeholder {
+  color: rgba(236, 240, 241, 0.6);
+}
+
+.container .login input:-ms-input-placeholder {
+  color: rgba(236, 240, 241, 0.6);
+}
+
+.container .login input::placeholder {
+  color: rgba(236, 240, 241, 0.6);
+  font-family: "Poppins", sans-serif;
+  /* เพิ่มฟอนต์ใน placeholder */
+}
+
+.container .login input.password {
+  /* leave space on the right for the password toggle button */
+  padding: 0 90px 0 40px;
+}
+
+.container .login input.username {
+  padding: 0 24px 0 40px;
+  /* room for the icon on the left */
+}
+
+.container .login .password-button {
+  position: absolute;
+  right: 8px;
+  top: 25%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: auto;
+  min-width: 60px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: none;
+  outline: none;
+  background-color: #34495e;
+  color: #ecf0f1;
+  white-space: nowrap;
+  /* prevent text wrapping */
+}
+
+.container .login .password-button:active {
+  transform: scale(0.95);
+}
+
+.container .login .login-button {
+  width: 100%;
+  margin: 20px 0px 0px;
+  align-items: center;
+  outline: none;
+  background-color: #006cb5;
+  color: #fff;
+  transition: transform 0.1s, background-color 0.2s;
+  font-family: "Poppins", sans-serif;
+  /* ฟอนต์สำหรับปุ่ม */
+  box-shadow: 0 6px 14px rgba(52, 152, 219, 0.35);
+  border: 2px solid #003d79;
+}
+
+.container .login .login-button:active {
+  transform: scale(0.95);
+}
+
+.google-login-button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #34495e;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  border: 2px solid #003d79;
+}
+
+.google-login-button:hover {
+  background-color: #1abc9c;
+}
+
+.container .footer {
+  text-align: center;
+  color: #ecf0f1;
+  margin-top: 15px;
+  font-size: 1rem;
+  font-family: "Poppins", sans-serif;
+}
+
+.footer-a {
+  font-size: 20px;
+}
+
+.container .footer .footer-a {
+  color: #3498db;
+  text-decoration: none;
+  transition: all 0.2s ease-in-out 0.1s;
+}
+
+.container .footer .footer-a:hover {
+  color: #1abc9c;
+}
+
+@-webkit-keyframes breath {
+
+  0%,
+  100% {
+    transform: rotateX(0deg);
+  }
+
+  50% {
+    transform: rotateX(60deg);
+  }
+}
+
+@keyframes breath {
+
+  0%,
+  100% {
+    transform: rotateX(0deg);
+  }
+
+  50% {
+    transform: rotateX(60deg);
+  }
+}
+
+/* กำหนดสไตล์ปุ่ม reset password */
+.reset-password-button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #34495e;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  border: 2px solid #0053a5;
+}
+
+/* การเปลี่ยนสีเมื่อ hover */
+.reset-password-button:hover {
+  background-color: #1abc9c;
+}
+
+/* Dog face color variables (used only for face-related parts) */
+:root {
+  /* สีขอบอุ้งเท้า / ดีเทลเล็ก ๆ */
+  --dog-blue: #4cd3ff;
+  /* ฟ้าอมเขียวพาสเทล */
+
+  /* สีหลักของใบหู ตา ปาก ฯลฯ */
+  --dog-blue-dark: #34495e;
+  /* น้ำเงินเข้ม almost black */
+
+  /* สีไฮไลต์ (ใช้กับจมูก/ดีเทลพิเศษ) */
+  --dog-blue-contrast: #f472b6;
+  /* ชมพูนีออนนิด ๆ */
+}
+
+/* เปลี่ยนสีจมูกให้ใช้สีไฮไลต์จากตัวแปรใหม่ */
+.container .nose .glow {
+  position: absolute;
+  top: 3px;
+  left: 32%;
+  width: 15px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--dog-blue-contrast);
+}
+
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
