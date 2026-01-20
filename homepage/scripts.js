@@ -64,13 +64,11 @@ function collectUniqueLabels(source) {
 function resetMediaDisplay() {
   const imagePreview = document.getElementById('imagePreview');
   const processedImage = document.getElementById('processedImage');
-  const videoPreview = document.getElementById('videoPreview');
   const processedVideo = document.getElementById('processedVideo');
   const blurredVideo = document.getElementById('blurredVideo');
   const containers = [
     'imageOriginalContainer',
     'imageProcessedContainer',
-    'videoOriginalContainer',
     'videoProcessedContainer',
     'videoBlurredContainer',
   ];
@@ -81,7 +79,7 @@ function resetMediaDisplay() {
     img.src = '';
   });
 
-  [videoPreview, processedVideo, blurredVideo].forEach((video) => {
+  [processedVideo, blurredVideo].forEach((video) => {
     if (!video) return;
     if (video.dataset && video.dataset.objectUrl) {
       URL.revokeObjectURL(video.dataset.objectUrl);
@@ -314,20 +312,8 @@ async function uploadVideo() {
     resetMediaDisplay();
     setLoadingState(true);
 
-    const videoPreview = document.getElementById('videoPreview');
     const processedVideo = document.getElementById('processedVideo');
     const blurredVideo = document.getElementById('blurredVideo');
-
-    if (videoPreview) {
-      const objectUrl = URL.createObjectURL(file);
-      videoPreview.src = objectUrl;
-      videoPreview.dataset.objectUrl = objectUrl;
-      videoPreview.style.display = 'block';
-      const container = document.getElementById('videoOriginalContainer');
-      if (container) {
-        container.style.display = 'block';
-      }
-    }
 
     try {
       const response = await fetch(`${window.API_BASE_URL}/analyze-video`, {
