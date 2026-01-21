@@ -37,10 +37,10 @@ function handleUnauthorizedResponse(response) {
     return true;
 }
 
-const HISTORY_TOGGLE_SHOW_LABEL = 'ดูประวัติการใช้งาน';
-const HISTORY_TOGGLE_HIDE_LABEL = 'ซ่อนประวัติการใช้งาน';
-const API_DETAILS_SHOW_LABEL = 'ดูรายละเอียด';
-const API_DETAILS_HIDE_LABEL = 'ซ่อนรายละเอียด';
+const HISTORY_TOGGLE_SHOW_LABEL = 'View History';
+const HISTORY_TOGGLE_HIDE_LABEL = 'Hide History';
+const API_DETAILS_SHOW_LABEL = 'View Details';
+const API_DETAILS_HIDE_LABEL = 'Hide Details';
 
 
 
@@ -433,9 +433,9 @@ function renderApiKeysWithHistory(apiKeys, historyEntries) {
 
     if (Array.isArray(apiKeys) && apiKeys.length) {
         apiKeys.forEach((key) => {
-            const lookupKey = key && Object.prototype.hasOwnProperty.call(key, 'api_key')
-                ? key.api_key
-                : undefined;
+            const lookupKey = key && Object.prototype.hasOwnProperty.call(key, 'api_key') ?
+                key.api_key :
+                undefined;
             const mapKey = lookupKey ?? null;
             const entries = groupedHistory.get(mapKey) || [];
             groupedHistory.delete(mapKey);
@@ -485,9 +485,9 @@ function createApiKeyCard(key, historyEntries, historyId, detailsId) {
 
     const outputModesText = escapeHtml(formatOutputModes(key.output_modes));
 
-    const historyContent = Array.isArray(historyEntries) && historyEntries.length
-        ? historyEntries.map(renderHistoryEntry).join('')
-        : `<p class="history-empty">ยังไม่มีประวัติการใช้งานสำหรับ API Key นี้</p>`;
+    const historyContent = Array.isArray(historyEntries) && historyEntries.length ?
+        historyEntries.map(renderHistoryEntry).join('') :
+        `<p class="history-empty">No history available for this API Key</p>`;
 
     return `
 
@@ -502,7 +502,7 @@ function createApiKeyCard(key, historyEntries, historyId, detailsId) {
                         </button>
                     </p>
                     <p class="api-key__summary-field"><strong>Plan:</strong> ${planText}</p>
-                    <p class="api-key__summary-field"><strong>สร้างเมื่อ:</strong> ${createdText}</p>
+                    <p class="api-key__summary-field"><strong>Created At:</strong> ${createdText}</p>
                 </div>
                 <button class="api-key-toggle" type="button" aria-expanded="false" data-target="${detailsId}">
                     <span class="api-key-toggle-label">${API_DETAILS_SHOW_LABEL}</span>
@@ -512,7 +512,6 @@ function createApiKeyCard(key, historyEntries, historyId, detailsId) {
 
             <div class="api-key__details" id="${detailsId}" aria-hidden="true">
                 <div class="api-key__details-content">
-                    <p><strong>Package:</strong> ${packageText}</p>
                     <p><strong>Media Access:</strong> ${mediaAccessText}</p>
                     <p><strong>Output Modes:</strong> ${outputModesText}</p>
                     <p><strong>Usage Count:</strong> ${usageCount}</p>
@@ -532,11 +531,11 @@ function createApiKeyCard(key, historyEntries, historyId, detailsId) {
 
 function createOrphanHistoryCard(orphanKey, historyEntries, historyId) {
 
-    const safeKey = orphanKey ? escapeHtml(orphanKey) : 'ไม่ทราบ';
+    const safeKey = orphanKey ? escapeHtml(orphanKey) : 'Unknown';
 
-    const historyContent = Array.isArray(historyEntries) && historyEntries.length
-        ? historyEntries.map(renderHistoryEntry).join('')
-        : `<p class="history-empty">ยังไม่มีประวัติการใช้งานสำหรับ API Key นี้</p>`;
+    const historyContent = Array.isArray(historyEntries) && historyEntries.length ?
+        historyEntries.map(renderHistoryEntry).join('') :
+        `<p class="history-empty">No history available for this API Key</p>`;
 
     return `
 
@@ -544,7 +543,7 @@ function createOrphanHistoryCard(orphanKey, historyEntries, historyId) {
 
             <p><strong>API Key:</strong> ${safeKey}</p>
 
-            <p class="orphan-note">ไม่สามารถจับคู่ประวัติการใช้งานกับ API Key ปัจจุบันได้</p>
+            <p class="orphan-note">Could not match history entries to current API Key</p>
 
             ${createHistorySection(historyId, historyContent)}
 
@@ -566,8 +565,8 @@ function createHistorySection(historyId, historyContent) {
             </button>
 
             <div class="history-list" id="${historyId}" aria-hidden="true">
-                <p class="history-warning" style="color: #ffca28; font-size: 0.9em; margin: 10px 0; font-style: italic;">
-                    ⚠️ หมายเหตุ: รูปภาพและวิดีโอจะถูกลบออกจากฐานข้อมูลภายใน 1 วัน
+                    <p class="history-warning" style="color: #ffca28; font-size: 0.9em; margin: 10px 0; font-style: italic;">
+                    ⚠️ Note: Images and videos will be removed from the database within 1 day
                 </p>
                 ${historyContent}
             </div>
@@ -596,7 +595,7 @@ function renderHistoryEntry(entry) {
 
     const mediaType = (entry.media_type || '').toLowerCase();
 
-    const mediaTypeLabel = mediaType === 'video' ? 'วิดีโอ' : mediaType === 'image' ? 'รูปภาพ' : 'ไม่ทราบ';
+    const mediaTypeLabel = mediaType === 'video' ? 'Video' : mediaType === 'image' ? 'Image' : 'Unknown';
 
     const isVideo = mediaType === 'video';
 
@@ -614,23 +613,23 @@ function renderHistoryEntry(entry) {
     const isExpired = createdDate && (now - createdDate > ONE_DAY_MS);
 
     if (isExpired) {
-        links.push(`<span class="expired-label" style="color: #aaa;">ไฟล์ถูกลบแล้ว (เกิน 1 วัน)</span>`);
+        links.push(`<span class="expired-label" style="color: #aaa;">File removed (older than 1 day)</span>`);
     } else if (isVideo) {
 
         if (entry.processed_video_url) {
-            links.push(`<a href='${escapeHtml(entry.processed_video_url)}' target='_blank' rel='noopener'>ดูวิดีโอ</a>`);
+            links.push(`<a href='${escapeHtml(entry.processed_video_url)}' target='_blank' rel='noopener'>View Video</a>`);
         }
         if (entry.processed_blurred_video_url) {
-            links.push(`<a href='${escapeHtml(entry.processed_blurred_video_url)}' target='_blank' rel='noopener'>ดูวิดีโอ (เบลอ)</a>`);
+            links.push(`<a href='${escapeHtml(entry.processed_blurred_video_url)}' target='_blank' rel='noopener'>View Video (Blurred)</a>`);
         }
 
     } else {
 
         if (entry.processed_image_url) {
-            links.push(`<a href='${escapeHtml(entry.processed_image_url)}' target='_blank' rel='noopener'>ดูภาพ</a>`);
+            links.push(`<a href='${escapeHtml(entry.processed_image_url)}' target='_blank' rel='noopener'>View Image</a>`);
         }
         if (entry.processed_blurred_image_url) {
-            links.push(`<a href='${escapeHtml(entry.processed_blurred_image_url)}' target='_blank' rel='noopener'>ดูภาพ (เบลอ)</a>`);
+            links.push(`<a href='${escapeHtml(entry.processed_blurred_image_url)}' target='_blank' rel='noopener'>View Image (Blurred)</a>`);
         }
 
     }
@@ -645,15 +644,15 @@ function renderHistoryEntry(entry) {
 
         <div class='history-entry'>
 
-            <p><strong>ชื่อไฟล์:</strong> ${fileName}</p>
-            <p><strong>สถานะ:</strong> ${statusBadge}</p>
-            <p><strong>ประเภทสื่อ:</strong> ${escapeHtml(mediaTypeLabel)}</p>
-            <p><strong>สรุปการตรวจจับ:</strong> ${detectionSummary}</p>
-            <p><strong>โมเดล:</strong> ${models}</p>
+            <p><strong>File Name:</strong> ${fileName}</p>
+            <p><strong>Status:</strong> ${statusBadge}</p>
+            <p><strong>Media Type:</strong> ${escapeHtml(mediaTypeLabel)}</p>
+            <p><strong>Detection Summary:</strong> ${detectionSummary}</p>
+            <p><strong>Models:</strong> ${models}</p>
             <p><strong>Thresholds:</strong> ${thresholds}</p>
-            <p><strong>สิทธิ์สื่อ:</strong> ${mediaAccess}</p>
-            <p><strong>โหมดเอาต์พุต:</strong> ${outputModes}</p>
-            <p><strong>วันที่สร้าง:</strong> ${createdText}</p>
+            <p><strong>Media Access:</strong> ${mediaAccess}</p>
+            <p><strong>Output Modes:</strong> ${outputModes}</p>
+            <p><strong>Created At:</strong> ${createdText}</p>
 
             ${actions}
 
@@ -721,9 +720,9 @@ async function loadApiKeysWithHistory() {
             return;
         }
         console.error('Error loading API key data:', error);
-        const fallbackMessage = error && error.message
-            ? error.message
-            : 'เกิดข้อผิดพลาดในการดึงข้อมูล API Keys';
+        const fallbackMessage = error && error.message ?
+            error.message :
+            'เกิดข้อผิดพลาดในการดึงข้อมูล API Keys';
         listElement.innerHTML = `<p>${escapeHtml(fallbackMessage)}</p>`;
     }
 

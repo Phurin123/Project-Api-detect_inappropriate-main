@@ -151,7 +151,10 @@ async function processMultipleImages(files) {
   const selection = collectModelSelections();
   if (!selection) return;
 
-  const { selectedModels, modelThresholds } = selection;
+  const {
+    selectedModels,
+    modelThresholds
+  } = selection;
 
   // Check if user selected a zip file
   const hasZip = files.some(f => f.name.toLowerCase().endsWith('.zip'));
@@ -170,13 +173,13 @@ async function processMultipleImages(files) {
 
   resetMediaDisplay();
 
-  // Show gallery container
+  // Prepare gallery but keep it hidden until processing completes
   const galleryContainer = document.getElementById('imageGalleryContainer');
   const gallery = document.getElementById('imageGallery');
   const galleryCount = document.getElementById('galleryCount');
 
-  if (galleryContainer) galleryContainer.style.display = 'block';
   if (gallery) gallery.innerHTML = '';
+  if (galleryContainer) galleryContainer.style.display = 'none';
 
   setLoadingState(true);
   setResultMessage(`กำลังประมวลผล...`, 'info');
@@ -264,9 +267,12 @@ async function processMultipleImages(files) {
         }
       });
 
-      // Update gallery count
+      // Update gallery count and show gallery now that results are ready
       if (galleryCount && gallery) {
         galleryCount.textContent = gallery.children.length;
+      }
+      if (galleryContainer && gallery && gallery.children.length > 0) {
+        galleryContainer.style.display = 'block';
       }
 
       // Display summary
@@ -291,7 +297,7 @@ async function uploadVideo() {
   input.accept = 'video/*';
 
   input.onchange = async () => {
-    const file = input.files?.[0];
+    const file = input.files?. [0];
     if (!file) return;
 
     const selection = collectModelSelections();
@@ -311,6 +317,8 @@ async function uploadVideo() {
 
     resetMediaDisplay();
     setLoadingState(true);
+    // Show processing message for video uploads (same as image flow)
+    setResultMessage('กำลังประมวลผล...', 'info');
 
     const processedVideo = document.getElementById('processedVideo');
     const blurredVideo = document.getElementById('blurredVideo');
@@ -423,7 +431,10 @@ async function uploadImageFromURL() {
     return;
   }
 
-  const { selectedModels, modelThresholds } = selection;
+  const {
+    selectedModels,
+    modelThresholds
+  } = selection;
 
   resetMediaDisplay();
   setLoadingState(true);
@@ -431,7 +442,9 @@ async function uploadImageFromURL() {
 
   try {
     // Fetch image from URL and convert to blob
-    const response = await fetch(imageUrl, { mode: 'cors' });
+    const response = await fetch(imageUrl, {
+      mode: 'cors'
+    });
     if (!response.ok) {
       throw new Error('ไม่สามารถดาวน์โหลดรูปภาพจาก URL ได้');
     }
@@ -444,7 +457,9 @@ async function uploadImageFromURL() {
     }
 
     // Create a file from blob
-    const file = new File([blob], 'image_from_url.jpg', { type: blob.type });
+    const file = new File([blob], 'image_from_url.jpg', {
+      type: blob.type
+    });
 
     const formData = new FormData();
     formData.append('images', file);

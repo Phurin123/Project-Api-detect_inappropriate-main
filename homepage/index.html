@@ -1,188 +1,248 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Objexify - ตรวจจับวัตถุอัตโนมัติ</title>
+    <link rel="stylesheet" href="../menubar/menubar.css" />
+    <link rel="stylesheet" href="../homepage/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+    <script src="../menubar/menubar-class.js" defer></script>
+  </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Objexify - ตรวจจับวัตถุอัตโนมัติ</title>
-  <link rel="stylesheet" href="../menubar/menubar.css" />
-  <link rel="stylesheet" href="../homepage/styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
-  <script src="../menubar/menubar-class.js" defer></script>
-</head>
+  <body>
+    <!-- พื้นหลังพาร์ติเคิล -->
+    <div id="menubar"></div>
+    <div id="particles-js"></div>
 
-<body>
-  <!-- พื้นหลังพาร์ติเคิล -->
-  <div id="menubar"></div>
-  <div id="particles-js"></div>
+    <header class="header">
+      <h1>Objexify 🚀</h1>
+      <p>ระบบ AI ตรวจจับวัตถุในภาพแบบเรียลไทม์</p>
+    </header>
 
-  <header class="header">
-    <h1>Objexify 🚀</h1>
-    <p>ระบบ AI ตรวจจับวัตถุในภาพแบบเรียลไทม์</p>
-  </header>
-
-  <!-- Step 1: เลือกโมเดลที่ต้องการตรวจสอบ -->
-  <div class="analysis-checkbox-group">
-    <label>
-      <input type="checkbox" name="analysis" value="porn" /> 🔞 ภาพลามก
-    </label>
-    <label>
-      <input type="checkbox" name="analysis" value="weapon" /> 🔫 อาวุธ
-    </label>
-    <label>
-      <input type="checkbox" name="analysis" value="cigarette" /> 🚬 บุหรี่
-    </label>
-    <label>
-      <input type="checkbox" name="analysis" value="violence" /> 🩸 ความรุนแรง
-    </label>
-  </div>
-
-  <!-- Step 2: เลือกระดับความเข้มงวด -->
-  <div class="threshold-presets" style="margin-top: 10px">
-    <label>🎯 เลือกระดับความเข้มงวด:</label><br />
-    <button class="threshold-btn" onclick="selectLevel(this, 0.3)">
-      🔹 ต่ำ
-    </button>
-    <button class="threshold-btn" onclick="selectLevel(this, 0.5)">
-      🔸 ปานกลาง
-    </button>
-    <button class="threshold-btn" onclick="selectLevel(this, 0.7)">
-      🔺 สูง
-    </button>
-  </div>
-
-  <!-- ตั้งค่าขั้นสูง -->
-  <div style="margin-top: 15px; margin-bottom: 25px">
-    <button class="advanced-btn" onclick="toggleAdvanced()">
-      ⚙️ ตั้งค่าขั้นสูง
-    </button>
-  </div>
-
-  <!-- 🔒 ซ่อนโมเดลไว้ในนี้ -->
-  <div class="model-select-group" id="advanced-settings" style="display: none; margin-top: 10px">
-    <h3>
-      🧠 เลือกโมเดลและ Confidence Threshold
-      <span class="info-tooltip">
-        ℹ️
-        <span class="tooltip-text">Confidence Threshold คือค่าความเชื่อมั่นขั้นต่ำที่ AI
-          ต้องมีในการตัดสินว่าวัตถุที่พบเป็นวัตถุจริง ๆ หากตั้งค่าสูง
-          ระบบจะตรวจจับเฉพาะวัตถุที่มั่นใจมากเท่านั้น</span>
-      </span>
-    </h3>
-
-    <label>
-      🔞 ภาพลามก
-      <input type="range" id="porn-threshold" min="0" max="1" step="0.01" value="0.5"
-        oninput="updateThreshold('porn')" />
-      <span id="porn-threshold-value">0.50</span>
-    </label>
-    <br />
-
-    <label>
-      🔫 อาวุธ
-      <input type="range" id="weapon-threshold" min="0" max="1" step="0.01" value="0.5"
-        oninput="updateThreshold('weapon')" />
-      <span id="weapon-threshold-value">0.50</span>
-    </label>
-    <br />
-
-    <label>
-      🚬 บุหรี่
-      <input type="range" id="cigarette-threshold" min="0" max="1" step="0.01" value="0.5"
-        oninput="updateThreshold('cigarette')" />
-      <span id="cigarette-threshold-value">0.50</span>
-    </label>
-    <br />
-
-    <label>
-      🩸 ความรุนแรง
-      <input type="range" id="violence-threshold" min="0" max="1" step="0.01" value="0.5"
-        oninput="updateThreshold('violence')" />
-      <span id="violence-threshold-value">0.50</span>
-    </label>
-    <br />
-  </div>
-
-  <!-- Step 3: อัปโหลดรูปภาพ/วิดีโอ -->
-  <div class="button-group">
-    <button class="upload-btn" onclick="handleFileUpload()">
-      📤 อัปโหลดรูปภาพ
-    </button>
-    <button class="upload-btn video" onclick="uploadVideo()">
-      📹 อัปโหลดวิดีโอ
-    </button>
-  </div>
-  <div class="url-input-group">
-    <label for="imageUrl">🔗 หรือใส่ URL รูปภาพ:</label>
-    <input type="text" id="imageUrl" placeholder="https://example.com/image.jpg" class="url-input" />
-    <button class="upload-btn url" onclick="uploadImageFromURL()">
-      ⬇️ โหลดจาก URL
-    </button>
-  </div>
-
-
-
-  <section class="result">
-    <div id="loadingSpinner" class="spinner" style="display: none"></div>
-    <p id="resultText"></p>
-
-    <div class="image-container" id="imageProcessedContainer" style="display: none">
-      <h3>✨ ภาพที่ประมวลผลแล้ว:</h3>
-      <img id="processedImage" class="processed-image" alt="Processed Image" />
+    <!-- Step 1: เลือกโมเดลที่ต้องการตรวจสอบ -->
+    <div class="analysis-checkbox-group">
+      <label>
+        <input type="checkbox" name="analysis" value="porn" /> 🔞 ภาพลามก
+      </label>
+      <label>
+        <input type="checkbox" name="analysis" value="weapon" /> 🔫 อาวุธ
+      </label>
+      <label>
+        <input type="checkbox" name="analysis" value="cigarette" /> 🚬 บุหรี่
+      </label>
+      <label>
+        <input type="checkbox" name="analysis" value="violence" /> 🩸 ความรุนแรง
+      </label>
     </div>
 
-
-    <div class="video-container" id="videoProcessedContainer" style="display: none">
-      <h3>✨ วิดีโอที่ประมวลผลแล้ว:</h3>
-      <video id="processedVideo" class="processed-video" controls playsinline></video>
+    <!-- Step 2: เลือกระดับความเข้มงวด -->
+    <div class="threshold-presets" style="margin-top: 10px">
+      <label>🎯 เลือกระดับความเข้มงวด:</label><br />
+      <button class="threshold-btn" onclick="selectLevel(this, 0.3)">
+        🔹 ต่ำ
+      </button>
+      <button class="threshold-btn" onclick="selectLevel(this, 0.5)">
+        🔸 ปานกลาง
+      </button>
+      <button class="threshold-btn" onclick="selectLevel(this, 0.7)">
+        🔺 สูง
+      </button>
     </div>
 
-    <div class="video-container" id="videoBlurredContainer" style="display: none">
-      <h3>🔒 วิดีโอเบลอวัตถุ:</h3>
-      <video id="blurredVideo" class="processed-video" controls playsinline></video>
+    <!-- ตั้งค่าขั้นสูง -->
+    <div style="margin-top: 15px; margin-bottom: 25px">
+      <button class="advanced-btn" onclick="toggleAdvanced()">
+        ⚙️ ตั้งค่าขั้นสูง
+      </button>
     </div>
 
-    <!-- Gallery for multiple images -->
-    <div id="imageGalleryContainer" style="display: none">
-      <h3>📸 ผลลัพธ์ทั้งหมด (<span id="galleryCount">0</span> รูป)</h3>
-      <div id="imageGallery" class="image-gallery"></div>
+    <!-- 🔒 ซ่อนโมเดลไว้ในนี้ -->
+    <div
+      class="model-select-group"
+      id="advanced-settings"
+      style="display: none; margin-top: 10px"
+    >
+      <h3>
+        🧠 เลือกโมเดลและ Confidence Threshold
+        <span class="info-tooltip">
+          ℹ️
+          <span class="tooltip-text"
+            >Confidence Threshold คือค่าความเชื่อมั่นขั้นต่ำที่ AI
+            ต้องมีในการตัดสินว่าวัตถุที่พบเป็นวัตถุจริง ๆ หากตั้งค่าสูง
+            ระบบจะตรวจจับเฉพาะวัตถุที่มั่นใจมากเท่านั้น</span
+          >
+        </span>
+      </h3>
+
+      <label>
+        🔞 ภาพลามก
+        <input
+          type="range"
+          id="porn-threshold"
+          min="0"
+          max="1"
+          step="0.01"
+          value="0.5"
+          oninput="updateThreshold('porn')"
+        />
+        <span id="porn-threshold-value">0.50</span>
+      </label>
+      <br />
+
+      <label>
+        🔫 อาวุธ
+        <input
+          type="range"
+          id="weapon-threshold"
+          min="0"
+          max="1"
+          step="0.01"
+          value="0.5"
+          oninput="updateThreshold('weapon')"
+        />
+        <span id="weapon-threshold-value">0.50</span>
+      </label>
+      <br />
+
+      <label>
+        🚬 บุหรี่
+        <input
+          type="range"
+          id="cigarette-threshold"
+          min="0"
+          max="1"
+          step="0.01"
+          value="0.5"
+          oninput="updateThreshold('cigarette')"
+        />
+        <span id="cigarette-threshold-value">0.50</span>
+      </label>
+      <br />
+
+      <label>
+        🩸 ความรุนแรง
+        <input
+          type="range"
+          id="violence-threshold"
+          min="0"
+          max="1"
+          step="0.01"
+          value="0.5"
+          oninput="updateThreshold('violence')"
+        />
+        <span id="violence-threshold-value">0.50</span>
+      </label>
+      <br />
     </div>
-  </section>
 
-  <script>
-    function updateThreshold(model) {
-      const value = document.getElementById(`${model}-threshold`).value;
-      document.getElementById(`${model}-threshold-value`).textContent =
-        parseFloat(value).toFixed(2);
-    }
+    <!-- Step 3: อัปโหลดรูปภาพ/วิดีโอ -->
+    <div class="button-group">
+      <button class="upload-btn" onclick="handleFileUpload()">
+        📤 อัปโหลดรูปภาพ
+      </button>
+      <button class="upload-btn video" onclick="uploadVideo()">
+        📹 อัปโหลดวิดีโอ
+      </button>
+    </div>
+    <div class="url-input-group">
+      <label for="imageUrl">🔗 หรือใส่ URL รูปภาพ:</label>
+      <input
+        type="text"
+        id="imageUrl"
+        placeholder="https://example.com/image.jpg"
+        class="url-input"
+      />
+      <button class="upload-btn url" onclick="uploadImageFromURL()">
+        ⬇️ โหลดจาก URL
+      </button>
+    </div>
 
-    function setThresholdLevel(value) {
-      const models = ["porn", "weapon", "cigarette", "violence"];
-      models.forEach((model) => {
-        const slider = document.getElementById(`${model}-threshold`);
-        const display = document.getElementById(`${model}-threshold-value`);
-        slider.value = value;
-        display.textContent = value.toFixed(2);
-      });
-    }
-  </script>
-  <script>
-    function selectLevel(button, value) {
-      setThresholdLevel(value);
+    <section class="result">
+      <div id="loadingSpinner" class="spinner" style="display: none"></div>
+      <p id="resultText"></p>
 
-      // ลบ active class จากปุ่มทั้งหมด
-      document.querySelectorAll(".threshold-btn").forEach((btn) => {
-        btn.classList.remove("active");
-      });
+      <div
+        class="image-container"
+        id="imageProcessedContainer"
+        style="display: none"
+      >
+        <h3>✨ ภาพที่ประมวลผลแล้ว:</h3>
+        <img
+          id="processedImage"
+          class="processed-image"
+          alt="Processed Image"
+        />
+      </div>
 
-      // เพิ่ม active class ให้ปุ่มที่กด
-      button.classList.add("active");
-    }
-  </script>
-  <!-- เรียกใช้ไฟล์ JavaScript ของคุณ -->
-  <script src="../config.js?v=20251018"></script>
-  <script src="../homepage/partcles-html.js?v=20251018"></script>
-  <script src="../homepage/scripts.js?v=20251018"></script>
-</body>
+      <div
+        class="video-container"
+        id="videoProcessedContainer"
+        style="display: none"
+      >
+        <h3>✨ วิดีโอที่ประมวลผลแล้ว:</h3>
+        <video
+          id="processedVideo"
+          class="processed-video"
+          controls
+          playsinline
+        ></video>
+      </div>
 
+      <div
+        class="video-container"
+        id="videoBlurredContainer"
+        style="display: none"
+      >
+        <h3>🔒 วิดีโอเบลอวัตถุ:</h3>
+        <video
+          id="blurredVideo"
+          class="processed-video"
+          controls
+          playsinline
+        ></video>
+      </div>
+
+      <!-- Gallery for multiple images -->
+      <div id="imageGalleryContainer" style="display: none">
+        <h3>📸 ผลลัพธ์ทั้งหมด (<span id="galleryCount">0</span> รูป)</h3>
+        <div id="imageGallery" class="image-gallery"></div>
+      </div>
+    </section>
+
+    <script>
+      function updateThreshold(model) {
+        const value = document.getElementById(`${model}-threshold`).value;
+        document.getElementById(`${model}-threshold-value`).textContent =
+          parseFloat(value).toFixed(2);
+      }
+
+      function setThresholdLevel(value) {
+        const models = ["porn", "weapon", "cigarette", "violence"];
+        models.forEach((model) => {
+          const slider = document.getElementById(`${model}-threshold`);
+          const display = document.getElementById(`${model}-threshold-value`);
+          slider.value = value;
+          display.textContent = value.toFixed(2);
+        });
+      }
+    </script>
+    <script>
+      function selectLevel(button, value) {
+        setThresholdLevel(value);
+
+        // ลบ active class จากปุ่มทั้งหมด
+        document.querySelectorAll(".threshold-btn").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+
+        // เพิ่ม active class ให้ปุ่มที่กด
+        button.classList.add("active");
+      }
+    </script>
+    <!-- เรียกใช้ไฟล์ JavaScript ของคุณ -->
+    <script src="../config.js?v=20251018"></script>
+    <script src="../homepage/partcles-html.js?v=20251018"></script>
+    <script src="../homepage/scripts.js?v=20251018"></script>
+  </body>
 </html>

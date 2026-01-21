@@ -575,10 +575,10 @@ def load_model(model_name: str) -> YOLO:
 
 
 models = {
-    "porn": load_model("best-porn.pt"),
-    "weapon": load_model("weapon3.pt"),
-    "cigarette": load_model("best-cigarette.pt"),
-    "violence": load_model("best-violence.pt"),
+    "porn": load_model("โป๊เปลือยดีจัดเลียๆๆๆๆ.pt"),
+    "weapon": load_model("อาวุธดีจัดปั้งงงงงๆ.pt"),
+    "cigarette": load_model("บุหรี่ของดีจัดสูดๆๆๆ.pt"),
+    "violence": load_model("ความรุนเเรงต่อยๆๆๆๆ.pt"),
 }
 
 
