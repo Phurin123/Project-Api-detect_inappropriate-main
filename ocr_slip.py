@@ -14,6 +14,7 @@ import requests
 import json
 from dotenv import load_dotenv
 import tempfile
+from datetime import datetime
 
 # ตั้งค่า logging
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +31,7 @@ class AdvancedSlipOCR:
             logger.warning("TYPHOON_OCR_API_KEY not found in environment variables")
         else:
             logger.info("Typhoon OCR API initialized successfully")
-        
+
         # Typhoon OCR API configuration
         self.ocr_url = "https://api.opentyphoon.ai/v1/ocr"
         self.model = "typhoon-ocr"
@@ -129,14 +130,12 @@ class AdvancedSlipOCR:
             while len(self._cache) > self._cache_max_entries:
                 self._cache.popitem(last=False)
 
-
-
     def extract_text_with_typhoon_ocr(self, image: np.ndarray) -> str:
         """ใช้ Typhoon OCR API เพื่อดึงข้อความจากภาพ"""
         if not self.api_key:
             logger.error("Typhoon OCR API key not configured")
             return ""
-        
+
         try:
             # บันทึกภาพเป็นไฟล์ชั่วคราว
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_file:
@@ -149,56 +148,60 @@ class AdvancedSlipOCR:
                     # BGR to RGB
                     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                     pil_image = Image.fromarray(image_rgb)
-                pil_image.save(temp_path, format='JPEG', quality=95)
-            
+                pil_image.save(temp_path, format="JPEG", quality=95)
+
             # เตรียมข้อมูลสำหรับ API request
-            with open(temp_path, 'rb') as file:
-                files = {'file': file}
+            with open(temp_path, "rb") as file:
+                files = {"file": file}
                 data = {
-                    'model': self.model,
-                    'task_type': self.task_type,
-                    'max_tokens': str(self.max_tokens),
-                    'temperature': str(self.temperature),
-                    'top_p': str(self.top_p),
-                    'repetition_penalty': str(self.repetition_penalty)
+                    "model": self.model,
+                    "task_type": self.task_type,
+                    "max_tokens": str(self.max_tokens),
+                    "temperature": str(self.temperature),
+                    "top_p": str(self.top_p),
+                    "repetition_penalty": str(self.repetition_penalty),
                 }
-                headers = {
-                    'Authorization': f'Bearer {self.api_key}'
-                }
-                
+                headers = {"Authorization": f"Bearer {self.api_key}"}
+
                 # ส่ง request ไปยัง API
-                response = requests.post(self.ocr_url, files=files, data=data, headers=headers, timeout=30)
-            
+                response = requests.post(
+                    self.ocr_url, files=files, data=data, headers=headers, timeout=30
+                )
+
             # ลบไฟล์ชั่วคราว
             try:
                 os.unlink(temp_path)
             except:
                 pass
-            
+
             if response.status_code == 200:
                 result = response.json()
-                
+
                 # ดึงข้อความจาก response
                 extracted_texts = []
-                for page_result in result.get('results', []):
-                    if page_result.get('success') and page_result.get('message'):
-                        content = page_result['message']['choices'][0]['message']['content']
+                for page_result in result.get("results", []):
+                    if page_result.get("success") and page_result.get("message"):
+                        content = page_result["message"]["choices"][0]["message"][
+                            "content"
+                        ]
                         try:
                             # พยายาม parse เป็น JSON ถ้ามันเป็น structured output
                             parsed_content = json.loads(content)
-                            text = parsed_content.get('natural_text', content)
+                            text = parsed_content.get("natural_text", content)
                         except json.JSONDecodeError:
                             text = content
                         extracted_texts.append(text)
-                    elif not page_result.get('success'):
-                        error_msg = page_result.get('error', 'Unknown error')
+                    elif not page_result.get("success"):
+                        error_msg = page_result.get("error", "Unknown error")
                         logger.error(f"OCR processing error: {error_msg}")
-                
-                return '\n'.join(extracted_texts)
+
+                return "\n".join(extracted_texts)
             else:
-                logger.error(f"Typhoon OCR API error: {response.status_code} - {response.text}")
+                logger.error(
+                    f"Typhoon OCR API error: {response.status_code} - {response.text}"
+                )
                 return ""
-                
+
         except Exception as e:
             logger.error(f"Typhoon OCR error: {e}")
             return ""
@@ -262,12 +265,29 @@ class AdvancedSlipOCR:
                             break
                     if month_num:
                         year_int = int(year_str)
-                        if year_int < 100:
-                            year_ad = year_int + 1957
-                        elif year_int >= 2500:
+                        current_be = datetime.now().year + 543  # เช่น 2025 → 2568
+                        current_ad = datetime.now().year
+
+                        # กรณี 4 หลัก
+                        if year_int >= 2500:
+                            # สมมุติว่าเป็น พ.ศ.
                             year_ad = year_int - 543
-                        else:
+                        elif 2000 <= year_int <= 2099:
+                            # สมมุติว่าเป็น ค.ศ.
                             year_ad = year_int
+                        elif 0 <= year_int <= 99:
+                            # ปี 2 หลัก → สมมุติว่าเป็น พ.ศ. ย่อ (เช่น 68 → 2568)
+                            guessed_be = 2500 + year_int
+                            # ตรวจสอบว่าอยู่ในช่วงสมเหตุสมผล (เช่น 2550–2599)
+                            if 2550 <= guessed_be <= 2599:
+                                year_ad = guessed_be - 543
+                            else:
+                                # ถ้าเกินช่วง → ไม่น่าจะถูกต้อง
+                                continue  # ข้าม match นี้
+                        else:
+                            # ปีแปลก (เช่น 1900, 3000) → ข้าม
+                            continue
+
                         date_tuple = (day, month_num, str(year_ad))
                         if self.is_valid_date(date_tuple):
                             return f"{int(day):02d}/{month_num}/{year_ad}"
@@ -351,8 +371,6 @@ class AdvancedSlipOCR:
                 "amount": None,
                 "full_name": None,
             }
-
-
 
     def extract_info(self, image):
         if isinstance(image, Image.Image):

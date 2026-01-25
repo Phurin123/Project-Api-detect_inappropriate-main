@@ -2129,18 +2129,12 @@ async def upload_receipt(
 
         if date_text:
             try:
-                # แปลงปี พ.ศ. เป็น ค.ศ. ก่อนเปรียบเทียบ
+                # สมมุติว่า date_text เป็นรูปแบบ DD/MM/YYYY (ค.ศ.)
                 parts = date_text.split("/")
-                day, month, year_str = parts[0], parts[1], parts[2]
-                year_int = int(year_str)
-                if year_int < 100:  # เช่น 68
-                    year_ad = year_int + 1957  # 68 + 1957 = 2025
-                elif year_int >= 2500:  # เช่น 2568
-                    year_ad = year_int - 543  # 2568 - 543 = 2025
-                else:  # ถ้าเป็นปี ค.ศ. อยู่แล้ว เช่น 2025
-                    year_ad = year_int
-
-                date_from_ocr = datetime(int(year_ad), int(month), int(day)).date()
+                if len(parts) != 3:
+                    raise HTTPException(...)
+                day, month, year_str = parts
+                date_from_ocr = datetime(int(year_str), int(month), int(day)).date()
 
                 if date_from_ocr != created_datetime.date():
                     raise HTTPException(
