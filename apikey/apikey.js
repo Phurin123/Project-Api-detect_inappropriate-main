@@ -57,9 +57,9 @@ async function generateApiKey() {
     const outputModes = Array.from(document.querySelectorAll('.output-option:checked')).map(option => option.value);
 
     const priceTable = {
-        image: 79,
-        video: 119,
-        both: 159
+        image: 1,
+        video: 1,
+        both: 1
     };
     const basePrice = priceTable[packageType];
     if (!basePrice) {
