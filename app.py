@@ -1438,14 +1438,17 @@ async def analyze_image(
             else "passed" if valid_results else "error"
         )
 
-        if processed_count:
-            api_keys_collection.update_one(
-                {"api_key": api_key},
-                {
-                    "$set": {"last_used_at": datetime.utcnow()},
-                    "$inc": {"usage_count": processed_count},
-                },
-            )
+        # --- สร้าง summary แบบรวมทุกภาพ ---
+        aggregated_summary = defaultdict(int)
+        for result in results:
+            if result["status"] in ("passed", "failed") and "detections" in result:
+                for det in result["detections"]:
+                    label = det.get("label")
+                    if label:
+                        aggregated_summary[label] += 1
+
+        summary_dict = dict(aggregated_summary)
+        summary_labels = list(summary_dict.keys())
 
         response_payload = {
             "status": overall_status,
@@ -1453,6 +1456,8 @@ async def analyze_image(
             "skipped": skipped_entries,
             "processed_count": processed_count,
             "output_modes": resolved_output_modes,
+            "summary": summary_dict,  # ← เพิ่มตรงนี้
+            "summary_labels": summary_labels,  # ← เพิ่มตรงนี้
         }
 
         if len(valid_results) == 1:
@@ -1816,7 +1821,7 @@ async def get_api_key_history(
         inferred_media_type = media_type if media_type else None
         if not inferred_media_type:
             extension = (
-                Path(processed_filename).suffix.lower() if processed_filename else ""
+                Path(processed_filename).suffix.lower() if processedFilename else ""
             ) or ""
             if extension in ALLOWED_VIDEO_EXTENSIONS:
                 inferred_media_type = "video"
