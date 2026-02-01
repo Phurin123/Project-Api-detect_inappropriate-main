@@ -1484,133 +1484,170 @@ async def analyze_image(
 @app.post("/analyze-video")
 async def analyze_video(
     request: Request,
+    video: UploadFile = File(...),
+    analysis_types_form: Optional[str] = Form(None, alias="analysis_types"),
+    thresholds_form: Optional[str] = Form(None, alias="thresholds"),
     api_key_data: Dict[str, Any] = Depends(require_api_key),
-    video: UploadFile = File(..., description="ไฟล์วิดีโอ (อัปโหลดได้เพียง 1 ไฟล์)"),
-    analysis_types: Optional[str] = Form(
-        None, description="เช่น `['porn','weapon']` หรือ `porn,weapon`"
-    ),
-    thresholds: Optional[str] = Form(
-        None, description='เช่น `{"porn":0.3,"weapon":0.5}`'
-    ),
-    output_modes: Optional[str] = Form(
-        None, description='เช่น `["bbox","blur"]` หรือ `bbox,blur`'
-    ),
 ):
-    form = await request.form()
-    video_files = form.getlist("video")  # ได้ list ของ UploadFile
-    if len(video_files) != 1:
+    original_name = sanitize_filename(video.filename)
+    if not allowed_video(original_name):
+        await video.close()
         raise HTTPException(
-            status_code=400,
-            detail=f"Exactly 1 video file is required, got {len(video_files)}."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported video format"
         )
-    
-    video: UploadFile = video_files[0]
-    # อ่านเนื้อหา
-    video_content = await video.read()
-    await video.close()
 
-    # ✅ ใช้ชื่อสุ่ม
-    safe_filename = f"video_{uuid.uuid4()}{Path(video.filename).suffix}"
-    video_path = UPLOAD_FOLDER / safe_filename
+    saved_record = await save_upload_file(video, original_name=original_name)
+    temp_path = Path(saved_record["file_path"])
+
+    # ✅ ตรวจสอบความยาววิดีโอ (จำกัด ≤ 60 วินาที)
+    cap = cv2.VideoCapture(str(temp_path))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    duration = frame_count / fps if fps > 0 else 0
+    cap.release()
+
+    if duration > 60:
+        # ลบไฟล์ชั่วคราวก่อนตอบกลับ error
+        remove_stored_file(saved_record)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The uploaded video exceeds the 1-minute limit.",
+        )
+
+    # prefer form-specified analysis_types when provided, otherwise use the api key's configured types
+    if analysis_types_form:
+        analysis_types = parse_analysis_types_value(analysis_types_form)
+    else:
+        analysis_types = parse_analysis_types_value(api_key_data.get("analysis_types"))
+
+    if not analysis_types:
+        remove_stored_file(saved_record)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No analysis_types provided"
+        )
+
+    media_access_config = {
+        str(item).lower() for item in api_key_data.get("media_access", []) if item
+    }
+    if media_access_config and "video" not in media_access_config:
+        remove_stored_file(saved_record)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API Key ไม่รองรับการวิเคราะห์วิดีโอ",
+        )
+
+    thresholds = parse_thresholds_value(api_key_data.get("thresholds"))
+    if not thresholds:
+        thresholds = parse_thresholds_value(thresholds_form)
+    for model_type in analysis_types:
+        thresholds.setdefault(model_type, 0.5)
+
+    output_modes_config = set(
+        parse_output_modes_value(api_key_data.get("output_modes"))
+    )
+    if not output_modes_config:
+        output_modes_config = {"bbox", "blur"}
+
+    include_bbox = not output_modes_config or "bbox" in output_modes_config
+    include_blur = not output_modes_config or "blur" in output_modes_config
 
     try:
-        # บันทึกไฟล์ชั่วคราว
-        with open(video_path, "wb") as f:
-            f.write(video_content)
-
-        # ตรวจสอบระยะเวลา
-        cap = cv2.VideoCapture(str(video_path))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        duration = frame_count / fps if fps > 0 else 0
-        cap.release()
-
-        if duration > 60:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="The uploaded video exceeds the 1-minute limit.",
+        async with analysis_concurrency_limiter:
+            processed_path, blurred_path, detections, aggregated = (
+                await run_in_threadpool(
+                    process_video_media,
+                    temp_path,
+                    analysis_types,
+                    thresholds,
+                    include_bbox,
+                    include_blur,
+                )
             )
 
-        # วิเคราะห์ config
-        parsed_analysis_types = parse_analysis_types_value(
-            analysis_types
-        ) or parse_analysis_types_value(api_key_data.get("analysis_types"))
-        parsed_thresholds = parse_thresholds_value(
-            thresholds
-        ) or parse_thresholds_value(api_key_data.get("thresholds"))
-        parsed_output_modes = parse_output_modes_value(
-            output_modes
-        ) or parse_output_modes_value(api_key_data.get("output_modes"))
-
-        if not parsed_analysis_types:
-            raise HTTPException(400, "No analysis types provided")
-
-        # ประมวลผลวิดีโอ
-        processed_video_path, blurred_video_path, detections, model_summary = (
-            await run_in_threadpool(
-                process_video_media,
-                video_path,
-                parsed_analysis_types,
-                parsed_thresholds,
-                "bbox" in parsed_output_modes,
-                "blur" in parsed_output_modes,
-            )
+        processed_filename = processed_path.name if processed_path else None
+        blurred_filename = blurred_path.name if blurred_path else None
+        processed_url = (
+            str(request.url_for("uploaded_file", filename=processed_filename))
+            if processed_filename
+            else None
+        )
+        blurred_url = (
+            str(request.url_for("uploaded_file", filename=blurred_filename))
+            if blurred_filename
+            else None
         )
 
-        # สร้าง URL
-        processed_video_url = blurred_video_url = None
-        if processed_video_path:
-            processed_video_url = str(
-                request.url_for("uploaded_file", filename=processed_video_path.name)
-            )
-        if blurred_video_path:
-            blurred_video_url = str(
-                request.url_for("uploaded_file", filename=blurred_video_path.name)
-            )
+        status_result = "passed"
+        for frame_info in detections:
+            for detection in frame_info["detections"]:
+                threshold = float(thresholds.get(detection.get("model_type"), 0.5))
+                if detection.get("confidence", 0) > threshold:
+                    status_result = "failed"
+                    break
+            if status_result == "failed":
+                break
 
-        # บันทึกการใช้งาน
         api_key = api_key_data.get("api_key")
         email = api_key_data.get("email")
+        summary_dict = dict(aggregated)
         log_api_key_usage_event(
             api_key=api_key,
             email=email,
-            analysis_types=parsed_analysis_types,
-            thresholds=parsed_thresholds,
+            analysis_types=analysis_types,
+            thresholds=thresholds,
             result={
-                "original_filename": video.filename,
-                "status": "success",
-                "detections": model_summary,
+                "original_filename": original_name,
+                "stored_filename": saved_record.get("stored_filename"),
+                "status": status_result,
+                "detections": summary_dict,
+                "processed_filename": processed_filename,
+                "blurred_filename": blurred_filename,
                 "media_type": "video",
-                "output_modes": parsed_output_modes,
+                "output_modes": (
+                    list(output_modes_config)
+                    if output_modes_config
+                    else ["bbox", "blur"]
+                ),
+                "media_access": (
+                    list(media_access_config)
+                    if media_access_config
+                    else ["image", "video"]
+                ),
             },
         )
 
-        # อัปเดตการใช้งาน
         api_keys_collection.update_one(
             {"api_key": api_key},
             {"$set": {"last_used_at": datetime.utcnow()}, "$inc": {"usage_count": 1}},
         )
 
-        return JSONResponse(
-            {
-                "status": "success",
-                "detections": detections,
-                "model_summary": model_summary,
-                "processed_video_url": processed_video_url,
-                "blurred_video_url": blurred_video_url,
-            }
+        Path(saved_record["file_path"]).unlink(missing_ok=True)
+        uploaded_files_collection.delete_one(
+            {"filename": saved_record["stored_filename"]}
         )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing video: {str(e)}",
+        return {
+            "status": status_result,
+            "original_filename": original_name,
+            "processed_video_url": processed_url,
+            "processed_blurred_video_url": blurred_url,
+            "detections": detections,
+            "summary": summary_dict,
+            "summary_labels": list(summary_dict.keys()),
+            "output_modes": (
+                list(output_modes_config) if output_modes_config else ["bbox", "blur"]
+            ),
+        }
+    except Exception as exc:
+        # ในกรณี error ระหว่างประมวลผล → ลบไฟล์ชั่วคราว
+        if temp_path.exists():
+            temp_path.unlink(missing_ok=True)
+        uploaded_files_collection.delete_one(
+            {"filename": saved_record["stored_filename"]}
         )
-    finally:
-        if video_path.exists():
-            video_path.unlink()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)
+        ) from exc
 
 
 @app.post("/request-api-key")

@@ -403,7 +403,7 @@ def main():
     isaram = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\อิสลาม.png"
     thanachat = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ธนชาติ.png"
 
-    image_path = thanachat
+    image_path = kasikor
 
     if os.path.exists(image_path):
         image = cv2.imread(image_path)
