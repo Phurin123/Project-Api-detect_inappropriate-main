@@ -37,7 +37,7 @@ loginButton.addEventListener("click", async (event) => {
       // เมื่อเข้าสู่ระบบสำเร็จ
       // เก็บอีเมลใน sessionStorage
       // เก็บ token ลง localStorage
-      localStorage.setItem('token', data.token);
+      localStorage.setItem('auth_token', data.token);
 
       // หลังจาก login สำเร็จ ให้ไปที่หน้า apikey.html
       window.location.href = '../apikey/view-api-keys.html'; // เปลี่ยนเส้นทางไปยังหน้า apikey.html

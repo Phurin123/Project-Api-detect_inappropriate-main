@@ -230,9 +230,6 @@ async function processMultipleImages(files) {
 
     const response = await fetch(`${window.API_BASE_URL}/analyze-image`, {
       method: 'POST',
-      headers: {
-        'x-api-key': window.API_KEY,
-      },
       body: formData,
     });
 
@@ -366,9 +363,6 @@ async function uploadVideo() {
     try {
       const response = await fetch(`${window.API_BASE_URL}/analyze-video`, {
         method: 'POST',
-        headers: {
-          'x-api-key': window.API_KEY,
-        },
         body: formData,
       });
 
@@ -524,9 +518,6 @@ async function uploadImageFromURL() {
     // Send to backend for analysis
     const apiResponse = await fetch(`${window.API_BASE_URL}/analyze-image`, {
       method: 'POST',
-      headers: {
-        'x-api-key': window.API_KEY,
-      },
       body: formData,
     });
 

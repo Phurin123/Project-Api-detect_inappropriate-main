@@ -859,6 +859,43 @@ if HOMEPAGE_DIR.exists():
     app.mount("/homepage", StaticFiles(directory=HOMEPAGE_DIR), name="homepage_static")
 
 
+@app.middleware("http")
+async def block_browser_api_key_usage(request: Request, call_next):
+    path = request.url.path
+    if path not in ["/analyze-image", "/analyze-video"]:
+        return await call_next(request)
+
+    origin = request.headers.get("origin")
+    user_agent = request.headers.get("user-agent", "").lower()
+    is_browser = any(x in user_agent for x in ["mozilla", "webkit", "gecko"])
+
+    # If the request comes from a browser
+    if is_browser:
+        if origin in ALLOWED_DEMO_ORIGINS:
+            request.state.is_demo_mode = True
+            return await call_next(request)
+        else:
+            # Block browser access even with x-api-key
+            return JSONResponse(
+                {
+                    "error": "Browser access not allowed. Use authorized demo or server-to-server with API key."
+                },
+                status_code=403,
+            )
+
+    # If not from a browser, require x-api-key
+    x_api_key = request.headers.get("x-api-key")
+    if not x_api_key:
+        return JSONResponse({"error": "Missing x-api-key"}, status_code=401)
+
+    api_key_data = api_keys_collection.find_one({"api_key": x_api_key})
+    if not api_key_data:
+        return JSONResponse({"error": "Invalid API Key"}, status_code=401)
+
+    request.state.api_key_data = api_key_data
+    return await call_next(request)
+
+
 async def get_current_user(
     authorization: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
@@ -917,6 +954,13 @@ async def require_api_key(
             )
 
     return api_key_data
+
+
+ALLOWED_DEMO_ORIGINS = {
+    origin.strip().rstrip("/")
+    for origin in os.getenv("API_BASE_URL", "").split(",")
+    if origin.strip()
+}
 
 
 @app.get("/")
@@ -1134,7 +1178,6 @@ def serialize_datetime(value: Any) -> Optional[str]:
 @app.post("/analyze-image")
 async def analyze_image(
     request: Request,
-    api_key_data: Dict[str, Any] = Depends(require_api_key),
     images: List[UploadFile] = File(
         ...,
         description="ไฟล์ภาพหรือ .zip ที่มีภาพ (ส่งได้หลายไฟล์)",
@@ -1149,6 +1192,48 @@ async def analyze_image(
     output_modes: Optional[str] = Form(
         None, description='เช่น `["bbox","blur"]` หรือ `bbox,blur`'
     ),
+):
+    # Check if the request is in demo mode
+    is_demo = getattr(request.state, "is_demo_mode", False)
+
+    if is_demo:
+        # Demo mode: Use safe default values
+        api_key_data = {
+            "email": "demo@demo.com",
+            "api_key": "demo",
+            "analysis_types": list(models.keys()),
+            "thresholds": {},
+            "media_access": ["image", "video"],
+            "output_modes": ["bbox", "blur"],
+            "plan": "demo",
+        }
+    else:
+        # Normal mode: Require x-api-key
+        x_api_key = request.headers.get("x-api-key")
+        if not x_api_key:
+            raise HTTPException(401, "Missing x-api-key")
+        api_key_data = api_keys_collection.find_one({"api_key": x_api_key})
+        if not api_key_data:
+            raise HTTPException(401, "Invalid API Key")
+
+    # Call the internal image analysis logic
+    return await _analyze_image_internal(
+        request=request,
+        api_key_data=api_key_data,
+        images=images,
+        analysis_types=analysis_types,
+        thresholds=thresholds,
+        output_modes=output_modes,
+    )
+
+
+async def _analyze_image_internal(
+    request: Request,
+    api_key_data: Dict[str, Any],
+    images: List[UploadFile],
+    analysis_types: Optional[str],
+    thresholds: Optional[str],
+    output_modes: Optional[str],
 ):
     files_payload: List[Dict[str, str]] = []
     skipped_entries: List[Dict[str, Any]] = []
@@ -1492,16 +1577,44 @@ async def analyze_video(
     video: UploadFile = File(...),
     analysis_types_form: Optional[str] = Form(None, alias="analysis_types"),
     thresholds_form: Optional[str] = Form(None, alias="thresholds"),
-    api_key_data: Dict[str, Any] = Depends(require_api_key),
 ):
-    original_name = sanitize_filename(video.filename)
-    if not allowed_video(original_name):
-        await video.close()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported video format"
-        )
+    is_demo = getattr(request.state, "is_demo_mode", False)
 
-    saved_record = await save_upload_file(video, original_name=original_name)
+    if is_demo:
+        api_key_data = {
+            "email": "demo@demo.com",
+            "api_key": "demo",
+            "analysis_types": list(models.keys()),
+            "thresholds": {},
+            "media_access": ["image", "video"],
+            "output_modes": ["bbox", "blur"],
+            "plan": "demo",
+        }
+    else:
+        x_api_key = request.headers.get("x-api-key")
+        if not x_api_key:
+            raise HTTPException(401, "Missing x-api-key")
+        api_key_data = api_keys_collection.find_one({"api_key": x_api_key})
+        if not api_key_data:
+            raise HTTPException(401, "Invalid API Key")
+
+    return await _analyze_video_internal(
+        request=request,
+        api_key_data=api_key_data,
+        video=video,
+        analysis_types_form=analysis_types_form,
+        thresholds_form=thresholds_form,
+    )
+
+
+async def _analyze_video_internal(
+    request: Request,
+    api_key_data: Dict[str, Any],
+    video: UploadFile,
+    analysis_types_form: Optional[str],
+    thresholds_form: Optional[str],
+):
+    saved_record = await save_upload_file(video)
     temp_path = Path(saved_record["file_path"])
 
     # ✅ ตรวจสอบความยาววิดีโอ (จำกัด ≤ 60 วินาที)
