@@ -1614,7 +1614,17 @@ async def _analyze_video_internal(
     analysis_types_form: Optional[str],
     thresholds_form: Optional[str],
 ):
-    saved_record = await save_upload_file(video)
+    original_name = sanitize_filename(video.filename)  # Define original_name
+    if not allowed_video(original_name):
+        await video.close()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported video format",
+        )
+
+    saved_record = await save_upload_file(
+        video, original_name=original_name
+    )  # Pass original_name
     temp_path = Path(saved_record["file_path"])
 
     # ✅ ตรวจสอบความยาววิดีโอ (จำกัด ≤ 60 วินาที)
