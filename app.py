@@ -1516,7 +1516,9 @@ async def _analyze_image_internal(
                 finally:
                     Path(file_path).unlink(missing_ok=True)
 
-        valid_results = [r for r in results if r["status"] in ("passed", "inappropriate")]
+        valid_results = [
+            r for r in results if r["status"] in ("passed", "inappropriate")
+        ]
         overall_status = (
             "inappropriate"
             if any(r["status"] == "inappropriate" for r in valid_results)
@@ -1526,7 +1528,10 @@ async def _analyze_image_internal(
         # --- สร้าง summary แบบรวมทุกภาพ ---
         aggregated_summary = defaultdict(int)
         for result in results:
-            if result["status"] in ("passed", "inappropriate") and "detections" in result:
+            if (
+                result["status"] in ("passed", "inappropriate")
+                and "detections" in result
+            ):
                 for det in result["detections"]:
                     label = det.get("label")
                     if label:
