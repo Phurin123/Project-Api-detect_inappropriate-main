@@ -240,7 +240,7 @@ async function processMultipleImages(files) {
       const results = Array.isArray(data.results) ? data.results : [data];
 
       let successCount = 0;
-      let failedCount = 0;
+      let inappropriateCount = 0;
 
       results.forEach(result => {
         const filename = result.original_filename || 'unknown';
@@ -251,10 +251,10 @@ async function processMultipleImages(files) {
 
         if (status === 'passed') {
           successCount++;
-        } else if (status === 'failed') {
-          failedCount++;
+        } else if (status === 'inappropriate') {
+          inappropriateCount++;
         } else {
-          failedCount++;
+          inappropriateCount++;
         }
 
         // Add to gallery
@@ -278,8 +278,8 @@ async function processMultipleImages(files) {
           if (status === 'passed') {
             statusBadge.className = 'gallery-item-status passed';
             statusBadge.textContent = '✅ ผ่าน';
-          } else if (status === 'failed') {
-            statusBadge.className = 'gallery-item-status failed';
+          } else if (status === 'inappropriate') {
+            statusBadge.className = 'gallery-item-status inappropriate';
             statusBadge.textContent = '❌ ไม่ผ่าน';
           } else {
             statusBadge.className = 'gallery-item-status error';
@@ -309,9 +309,9 @@ async function processMultipleImages(files) {
       }
 
       // Display summary
-      const finalStatus = failedCount > 0 ? 'error' : 'success';
+      const finalStatus = inappropriateCount > 0 ? 'error' : 'success';
       setResultMessage(
-        `เสร็จสิ้น! ประมวลผล ${results.length} รูป | ✅ ผ่าน: ${successCount} | ❌ ไม่ผ่าน: ${failedCount}`,
+        `เสร็จสิ้น! ประมวลผล ${results.length} รูป | ✅ ผ่าน: ${successCount} | ❌ ไม่ผ่าน: ${inappropriateCount}`,
         finalStatus
       );
     } else {
@@ -376,11 +376,11 @@ async function uploadVideo() {
           summaryLabels.length ? summaryLabels : data.detections,
         );
         const resolvedStatus =
-          status || (labels.length ? 'failed' : 'passed');
+          status || (labels.length ? 'inappropriate' : 'passed');
         const labelsSuffix = labels.length ? ` | รายการตรวจพบ: ${labels.join(', ')}` : '';
         const noLabelsSuffix = ' | ไม่พบวัตถุที่ตรงตามเงื่อนไข';
 
-        if (resolvedStatus === 'failed') {
+        if (resolvedStatus === 'inappropriate') {
           setResultMessage(
             `ผลลัพธ์: ไม่ผ่านการทดสอบ${labelsSuffix || noLabelsSuffix}`,
             'error',
@@ -527,11 +527,11 @@ async function uploadImageFromURL() {
       const labels = collectUniqueLabels(detections);
       const status =
         (typeof data.status === 'string' && data.status.toLowerCase()) ||
-        (labels.length ? 'failed' : 'passed');
+        (labels.length ? 'inappropriate' : 'passed');
       const labelsSuffix = labels.length ? ` | รายการตรวจพบ: ${labels.join(', ')}` : '';
       const noLabelsSuffix = ' | ไม่พบวัตถุที่ตรงตามเงื่อนไข';
 
-      if (status === 'failed') {
+      if (status === 'inappropriate') {
         setResultMessage(
           `ผลลัพธ์: ไม่ผ่านการทดสอบ${labelsSuffix || noLabelsSuffix}`,
           'error',

@@ -1467,7 +1467,7 @@ async def _analyze_image_internal(
                     for d in detections:
                         th = float(resolved_thresholds.get(d.get("model_type"), 0.5))
                         if d.get("confidence", 0) > th:
-                            status_result = "failed"
+                            status_result = "inappropriate"
                             break
 
                     result_entry = {
@@ -1516,17 +1516,17 @@ async def _analyze_image_internal(
                 finally:
                     Path(file_path).unlink(missing_ok=True)
 
-        valid_results = [r for r in results if r["status"] in ("passed", "failed")]
+        valid_results = [r for r in results if r["status"] in ("passed", "inappropriate")]
         overall_status = (
-            "failed"
-            if any(r["status"] == "failed" for r in valid_results)
+            "inappropriate"
+            if any(r["status"] == "inappropriate" for r in valid_results)
             else "passed" if valid_results else "error"
         )
 
         # --- สร้าง summary แบบรวมทุกภาพ ---
         aggregated_summary = defaultdict(int)
         for result in results:
-            if result["status"] in ("passed", "failed") and "detections" in result:
+            if result["status"] in ("passed", "inappropriate") and "detections" in result:
                 for det in result["detections"]:
                     label = det.get("label")
                     if label:
@@ -1710,9 +1710,9 @@ async def _analyze_video_internal(
             for detection in frame_info["detections"]:
                 threshold = float(thresholds.get(detection.get("model_type"), 0.5))
                 if detection.get("confidence", 0) > threshold:
-                    status_result = "failed"
+                    status_result = "inappropriate"
                     break
-            if status_result == "failed":
+            if status_result == "inappropriate":
                 break
 
         api_key = api_key_data.get("api_key")
