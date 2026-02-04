@@ -567,7 +567,7 @@ models = {
     "porn": load_model("โป๊เปลือยดีจัดเลียๆๆๆๆ.pt"),
     "weapon": load_model("อาวุธดีจัดปั้งงงงงๆ.pt"),
     "cigarette": load_model("บุหรี่ของดีจัดสูดๆๆๆ.pt"),
-    "violence": load_model("ความรุนเเรงต่อยๆๆๆๆ.pt"),
+    "violence": load_model("violence-pose.pt"),
 }
 
 
@@ -756,19 +756,30 @@ def process_video_media(
     last_blurred_frame = None
     last_detections = []
 
+    processed_frame_count = 0  # Count only processed frames
+    frames_with_detections = 0  # Count frames with valid detections
+
     try:
         while True:
             ret, frame = capture.read()
             if not ret:
                 break
 
-            # Process frame only if it's the Nth frame (based on VIDEO_FRAME_SKIP)
             should_process = (frame_index % VIDEO_FRAME_SKIP) == 0
 
             if should_process:
-                # Run AI detection on this frame
+                processed_frame_count += 1
                 detections = run_models_on_frame(frame, model_types, thresholds)
                 last_detections = detections  # Cache for skipped frames
+
+                # Check if this frame has valid detections
+                has_valid_detection = any(
+                    d.get("confidence", 0)
+                    >= float(thresholds.get(d.get("model_type"), 0.5))
+                    for d in detections
+                )
+                if has_valid_detection:
+                    frames_with_detections += 1
 
                 if writer_processed is not None:
                     bbox_frame = draw_bounding_boxes_np(frame, detections)
@@ -786,7 +797,6 @@ def process_video_media(
                 # Write the raw frame with previous detections overlaid
                 if writer_processed is not None:
                     if last_bbox_frame is not None:
-                        # Apply previous detections to current frame
                         bbox_frame = draw_bounding_boxes_np(frame, detections)
                         writer_processed.write(bbox_frame)
                     else:
@@ -794,7 +804,6 @@ def process_video_media(
 
                 if writer_blurred is not None:
                     if last_blurred_frame is not None:
-                        # Apply previous blur to current frame
                         blurred_frame = blur_detected_areas_np(frame, detections)
                         writer_blurred.write(blurred_frame)
                     else:
@@ -823,6 +832,12 @@ def process_video_media(
         if writer_blurred:
             writer_blurred.release()
 
+    detection_ratio = (
+        frames_with_detections / processed_frame_count
+        if processed_frame_count > 0
+        else 0.0
+    )
+
     try:
         if processed_path is not None:
             optimize_mp4_faststart(processed_path)
@@ -842,7 +857,13 @@ def process_video_media(
             {"filename": blurred_filename, "created_at": datetime.utcnow()}
         )
 
-    return processed_path, blurred_path, detections_per_frame, dict(aggregated)
+    return (
+        processed_path,
+        blurred_path,
+        detections_per_frame,
+        dict(aggregated),
+        detection_ratio,
+    )
 
 
 app = FastAPI(title="Objexify API", version="2.0.0")
@@ -1686,7 +1707,7 @@ async def _analyze_video_internal(
 
     try:
         async with analysis_concurrency_limiter:
-            processed_path, blurred_path, detections, aggregated = (
+            processed_path, blurred_path, detections, aggregated, detection_ratio = (
                 await run_in_threadpool(
                     process_video_media,
                     temp_path,
@@ -1710,15 +1731,8 @@ async def _analyze_video_internal(
             else None
         )
 
-        status_result = "passed"
-        for frame_info in detections:
-            for detection in frame_info["detections"]:
-                threshold = float(thresholds.get(detection.get("model_type"), 0.5))
-                if detection.get("confidence", 0) > threshold:
-                    status_result = "inappropriate"
-                    break
-            if status_result == "inappropriate":
-                break
+        # Use detection_ratio to determine status
+        status_result = "inappropriate" if detection_ratio >= 0.7 else "passed"
 
         api_key = api_key_data.get("api_key")
         email = api_key_data.get("email")
@@ -1949,7 +1963,7 @@ async def get_api_key_history(
         inferred_media_type = media_type if media_type else None
         if not inferred_media_type:
             extension = (
-                Path(processed_filename).suffix.lower() if processedFilename else ""
+                Path(processed_filename).suffix.lower() if processed_filename else ""
             ) or ""
             if extension in ALLOWED_VIDEO_EXTENSIONS:
                 inferred_media_type = "video"
