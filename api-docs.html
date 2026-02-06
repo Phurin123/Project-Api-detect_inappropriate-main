@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>คู่มือการใช้งาน Image & Video Analysis API</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: "#3498db",
+            secondary: "#2c3e50",
+            accent: "#ecf0f1",
+            bgDark: "#1e1e1e",
+            containerBg: "#34495e",
+          },
+          fontFamily: {
+            prompt: ["Prompt", "sans-serif"],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body {
+      margin: 0;
+      padding: 2rem;
+      font-family: "Prompt", sans-serif;
+      background: linear-gradient(to right, #1e1e1e, #2c3e50);
+      color: #ecf0f1;
+      min-height: 100vh;
+    }
+
+    .description-container {
+      margin: 2rem auto;
+      max-width: 900px;
+      background: #34495e;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      border: 2px solid #3498db;
+      text-align: left;
+    }
+
+    pre {
+      background: #1a1a1a !important;
+      border: 1px solid #3498db;
+      position: relative;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(52, 152, 219, 0.2);
+      color: #3498db;
+      border: 1px solid #3498db;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      z-index: 10;
+      font-family: "Prompt", sans-serif;
+    }
+
+    .copy-btn:hover {
+      background: #3498db;
+      color: #fff;
+    }
+
+    .copy-btn.copied {
+      background: #2ecc71;
+      border-color: #2ecc71;
+      color: #fff;
+    }
+
+    table {
+      background-color: #2c3e50 !important;
+      color: #ecf0f1 !important;
+      border-collapse: separate;
+      border-spacing: 0;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #3498db;
+    }
+
+    th {
+      background-color: #34495e !important;
+      color: #3498db !important;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    td,
+    th {
+      border-bottom: 1px solid #1e1e1e;
+      padding: 1rem;
+    }
+
+    code {
+      color: #ecf0f1 !important;
+      background: transparent !important;
+      padding: 0 !important;
+      border: none !important;
+    }
+
+    .bg-red-50 {
+      background-color: rgba(239, 68, 68, 0.1) !important;
+      border-color: #ef4444 !important;
+      color: #fca5a5 !important;
+    }
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const codeBlocks = document.querySelectorAll('pre');
+      codeBlocks.forEach((block) => {
+        const button = document.createElement('button');
+        button.className = 'copy-btn';
+        button.innerText = 'คัดลอก';
+
+        block.appendChild(button);
+
+        button.addEventListener('click', () => {
+          const code = block.querySelector('code').innerText;
+          navigator.clipboard.writeText(code).then(() => {
+            button.innerText = 'คัดลอกแล้ว!';
+            button.classList.add('copied');
+
+            setTimeout(() => {
+              button.innerText = 'คัดลอก';
+              button.classList.remove('copied');
+            }, 2000);
+          });
+        });
+      });
+    });
+  </script>
+</head>
+
+<body class="font-prompt max-w-5xl mx-auto">
+  <header class="mb-10 text-center">
+    <h1 class="text-3xl font-bold text-primary mb-2">คู่มือการใช้งาน API</h1>
+    <p class="text-xl text-gray-600">Image & Video Analysis API Guide</p>
+  </header>
+
+  <section class="description-container prose prose-invert max-w-none">
+    <p>
+      เอกสารนี้อธิบายวิธีใช้งาน API สำหรับการวิเคราะห์รูปภาพ (<code>analyze-image</code>) และวิดีโอ
+      (<code>analyze-video</code>) โดยระบบสามารถตรวจจับเนื้อหาที่ไม่เหมาะสม เช่น
+      ภาพลามกอนาจาร, บุหรี่,
+      ความรุนแรง และอาวุธ พร้อมทั้งสร้างผลลัพธ์แบบแสดงกรอบวัตถุ (bounding box)
+      และเบลอวัตถุ (blur)
+    </p>
+    <p>
+      ระบบวิเคราะห์ภาพและวิดีโอถูกออกแบบให้ผูกการตั้งค่าการวิเคราะห์ไว้กับ
+      <strong>API Key</strong> โดยตรง ซึ่งหมายความว่าผู้ใช้งาน
+      <strong>ไม่จำเป็นต้องระบุพารามิเตอร์เพิ่มเติม</strong> เช่น
+      ประเภทการวิเคราะห์ (analysis types), ค่าเกณฑ์ (thresholds)
+      หรือโหมดผลลัพธ์ (output modes) ในคำร้องขอ
+    </p>
+    <p>
+      ทุกการตั้งค่าจะถูกโหลดอัตโนมัติตามสิทธิ์และค่ากำหนดที่ผูกกับ API Key
+      นั้น
+    </p>
+
+    <div class="bg-red-50 border-l-4 border-red-500 p-4 my-4">
+      <p class="font-semibold">⚠️ สำคัญมาก:</p>
+      <p>
+        <strong>API นี้อนุญาตให้เรียกใช้งานแบบ server-to-server เท่านั้น</strong><br />
+        <strong>ไม่อนุญาตให้ส่งคำร้องขอโดยตรงจากเว็บไซต์หรือเบราว์เซอร์</strong>
+        เพื่อป้องกันการรั่วไหลของ API Key ของผู้ใช้
+      </p>
+    </div>
+  </section>
+
+  <section class="description-container">
+    <h2 class="text-2xl font-bold mb-4 text-primary">
+      การเตรียมไฟล์ Environment Variables (.env)
+    </h2>
+    <p class="mb-4">
+      ก่อนเรียกใช้งาน API ผู้ใช้งานจำเป็นต้องกำหนดค่า
+      <strong>API Key</strong> และ
+      <strong>API Endpoint</strong> ไว้ในไฟล์กำหนดค่าของระบบ (Environment
+      Variables) เพื่อหลีกเลี่ยงการเขียนข้อมูลสำคัญลงในโค้ดโดยตรง
+      และเพิ่มความปลอดภัยในการใช้งาน API
+    </p>
+    <p class="mb-4">
+      แนะนำให้ผู้ใช้งานสร้างไฟล์
+      <code>.env</code> ภายในโปรเจกต์ฝั่ง
+      Backend ของตนเอง และกำหนดค่าดังนี้:
+    </p>
+    <pre class="bg-gray-900 text-green-400 p-4 rounded-lg border border-primary overflow-x-auto"><code>API_KEY=your_api_key_here
+API_ENDPOINT=https://objexify.dpdns.org</code></pre>
+  </section>
+
+
+  <!-- Image API -->
+  <section class="description-container">
+    <h2 class="text-2xl font-bold mb-4 text-primary">
+      API สำหรับวิเคราะห์ภาพ (<code>/analyze-image</code>)
+    </h2>
+
+
+    <h3 class="text-xl font-semibold mt-6 mb-3">รายละเอียด Endpoint</h3>
+    <table class="min-w-full bg-white border border-gray-200 rounded-lg mb-6">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="py-2 px-4 border-b">หัวข้อ</th>
+          <th class="py-2 px-4 border-b">รายละเอียด</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">Method</td>
+          <td class="py-2 px-4 border-b">POST</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">Endpoint</td>
+          <td class="py-2 px-4 border-b">/analyze-image</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">ชื่อพารามิเตอร์</td>
+          <td class="py-2 px-4 border-b">images</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">ประเภท</td>
+          <td class="py-2 px-4 border-b">File</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">ประเภทไฟล์ที่รองรับ</td>
+          <td class="py-2 px-4 border-b">
+            .jpg, .jpeg, .png, หรือ .zip (บรรจุภาพหลายไฟล์)
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">ข้อกำหนดจำนวนไฟล์</td>
+          <td class="py-2 px-4 border-b">1 – 100 ไฟล์ต่อคำร้องขอ</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="text-xl font-semibold mt-6 mb-3">ตัวอย่างคำร้องขอ</h3>
+    <h4 class="font-medium mt-4">cURL</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>curl -X POST "https://objexify.dpdns.org/analyze-image" \
+  -H "Authorization: Bearer your_api_key_here" \
+  -F "images=@image1.jpg" \
+  -F "images=@image2.png"</code></pre>
+
+    <h4 class="font-medium mt-4">Python (Flask / requests)</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>import requests
+
+url = "https://objexify.dpdns.org/analyze-image"
+headers = {"Authorization": "Bearer your_api_key_here"}
+files = [
+    ("images", open("image1.jpg", "rb")),
+    ("images", open("image2.png", "rb"))
+]
+
+response = requests.post(url, headers=headers, files=files)
+print(response.json())</code></pre>
+
+    <h4 class="font-medium mt-4">PHP</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>&lt;?php
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, 'https://objexify.dpdns.org/analyze-image');
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Authorization: Bearer your_api_key_here'
+]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, [
+    'images' => new CURLFile('image1.jpg'),
+    'images' => new CURLFile('image2.png')
+]);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+$response = curl_exec($ch);
+curl_close($ch);
+echo $response;
+?&gt;</code></pre>
+
+    <h4 class="font-medium mt-4">Java (Apache HttpClient)</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+
+import java.io.File;
+
+public class ImageAnalysis {
+    public static void main(String[] args) throws Exception {
+        CloseableHttpClient client = HttpClients.createDefault();
+        HttpPost post = new HttpPost("https://objexify.dpdns.org/analyze-image");
+        post.setHeader("Authorization", "Bearer your_api_key_here");
+
+        HttpEntity multipart = MultipartEntityBuilder.create()
+            .addBinaryBody("images", new File("image1.jpg"))
+            .addBinaryBody("images", new File("image2.png"))
+            .build();
+
+        post.setEntity(multipart);
+        try (CloseableHttpResponse response = client.execute(post)) {
+            System.out.println(EntityUtils.toString(response.getEntity()));
+        }
+    }
+}</code></pre>
+
+    <h4 class="font-medium mt-4">Go (Golang)</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>package main
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"os"
+)
+
+func main() {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	for _, filename := range []string{"image1.jpg", "image2.png"} {
+		file, _ := os.Open(filename)
+		defer file.Close()
+		part, _ := writer.CreateFormFile("images", filename)
+		io.Copy(part, file)
+	}
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", "https://objexify.dpdns.org/analyze-image", body)
+	req.Header.Set("Authorization", "Bearer your_api_key_here")
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{}
+	resp, _ := client.Do(req)
+	defer resp.Body.Close()
+
+	result, _ := io.ReadAll(resp.Body)
+	fmt.Println(string(result))
+}</code></pre>
+
+    <h4 class="font-medium mt-4">Node.js (axios)</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>const axios = require('axios');
+const fs = require('fs');
+const FormData = require('form-data');
+
+const formData = new FormData();
+formData.append('images', fs.createReadStream('image1.jpg'));
+formData.append('images', fs.createReadStream('image2.png'));
+
+axios.post('https://objexify.dpdns.org/analyze-image', formData, {
+  headers: {
+    ...formData.getHeaders(),
+    'Authorization': 'Bearer your_api_key_here'
+  }
+})
+.then(res => console.log(res.data))
+.catch(err => console.error(err));</code></pre>
+
+    <h3 class="text-xl font-semibold mt-6 mb-3">
+      ตัวอย่างผลลัพธ์ (Response)
+    </h3>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>{
+  "status": "inappropriate",
+  "results": [
+    {
+      "original_filename": "image1.jpg",
+      "detections": [
+        {
+          "label": "nudity",
+          "confidence": 0.92,
+          "bbox": [100, 50, 300, 400],
+          "model_type": "nsfw_detector"
+        }
+      ],
+      "model_summary": { "nudity": 1 },
+      "processed_image_url": "https://cdn.example.com/processed/image1_bbox.jpg",
+      "processed_blurred_image_url": "https://cdn.example.com/processed/image1_blur.jpg"
+    },
+    {
+      "original_filename": "image2.png",
+      "detections": [],
+      "model_summary": {},
+      "processed_image_url": null,
+      "processed_blurred_image_url": null
+    }
+  ],
+  "skipped": [],
+  "processed_count": 2,
+  "output_modes": ["bbox", "blur"],
+  "summary": { "nudity": 1 },
+  "summary_labels": ["nudity"]
+}</code></pre>
+
+    <h3 class="text-xl font-semibold mt-6 mb-3">
+      API Response Fields – <code>/analyze-image</code>
+    </h3>
+    <table class="min-w-full bg-white border border-gray-200 rounded-lg mb-6">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="py-2 px-4 border-b">Field</th>
+          <th class="py-2 px-4 border-b">Type</th>
+          <th class="py-2 px-4 border-b">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">status</td>
+          <td class="py-2 px-4 border-b">String</td>
+          <td class="py-2 px-4 border-b">
+            สถานะโดยรวมของการวิเคราะห์:
+            <code>"passed"</code> (ไม่พบเนื้อหาไม่เหมาะสม),
+            <code>"inappropriate"</code> (พบเนื้อหาไม่เหมาะสม)
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">results</td>
+          <td class="py-2 px-4 border-b">Array of Object</td>
+          <td class="py-2 px-4 border-b">
+            รายการผลลัพธ์ของแต่ละภาพที่ประมวลผล
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">original_filename</td>
+          <td class="py-2 px-4 border-b">String</td>
+          <td class="py-2 px-4 border-b">ชื่อไฟล์เดิมที่ผู้ใช้อัปโหลด</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">detections</td>
+          <td class="py-2 px-4 border-b">Array of Object</td>
+          <td class="py-2 px-4 border-b">รายการวัตถุที่ตรวจพบในภาพ</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">label</td>
+          <td class="py-2 px-4 border-b">String</td>
+          <td class="py-2 px-4 border-b">ชื่อวัตถุที่ตรวจพบ</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">confidence</td>
+          <td class="py-2 px-4 border-b">Number</td>
+          <td class="py-2 px-4 border-b">ค่าความมั่นใจ (0.0–1.0)</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">bbox</td>
+          <td class="py-2 px-4 border-b">Array of Number</td>
+          <td class="py-2 px-4 border-b">พิกัดกรอบ [x1, y1, x2, y2]</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">model_type</td>
+          <td class="py-2 px-4 border-b">String</td>
+          <td class="py-2 px-4 border-b">โมเดลที่ใช้ตรวจจับ</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">model_summary</td>
+          <td class="py-2 px-4 border-b">Object</td>
+          <td class="py-2 px-4 border-b">
+            สรุปจำนวนครั้งที่ตรวจพบแต่ละ label
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">processed_image_url</td>
+          <td class="py-2 px-4 border-b">String or null</td>
+          <td class="py-2 px-4 border-b">URL รูปภาพที่ใส่ bounding box</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">
+            processed_blurred_image_url
+          </td>
+          <td class="py-2 px-4 border-b">String or null</td>
+          <td class="py-2 px-4 border-b">
+            URL รูปภาพที่เบลอพื้นที่หาไม่เหมาะสม
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">error</td>
+          <td class="py-2 px-4 border-b">String (ถ้ามี)</td>
+          <td class="py-2 px-4 border-b">ข้อความ error หากประมวลผลไม่ได้</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">skipped</td>
+          <td class="py-2 px-4 border-b">Array of Object</td>
+          <td class="py-2 px-4 border-b">
+            ไฟล์ที่ข้าม (เช่น นามสกุลไม่รองรับ หรือ ZIP เสีย)
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">name</td>
+          <td class="py-2 px-4 border-b">String</td>
+          <td class="py-2 px-4 border-b">ชื่อไฟล์ที่ข้าม</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">reason</td>
+          <td class="py-2 px-4 border-b">String</td>
+          <td class="py-2 px-4 border-b">
+            เหตุผล เช่น <code>"unsupported_extension"</code>,
+            <code>"invalid_zip"</code>
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">processed_count</td>
+          <td class="py-2 px-4 border-b">Integer</td>
+          <td class="py-2 px-4 border-b">จำนวนไฟล์ที่ประมวลผลสำเร็จ</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">output_modes</td>
+          <td class="py-2 px-4 border-b">Array of String</td>
+          <td class="py-2 px-4 border-b">
+            โหมด output ที่ใช้: <code>["bbox"]</code>, <code>["blur"]</code>
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">summary</td>
+          <td class="py-2 px-4 border-b">Object</td>
+          <td class="py-2 px-4 border-b">
+            สรุปจำนวน detection ทั้งหมดข้ามทุกภาพ จำแนกตาม label เช่น
+            <code>{"gun": 4, "knife": 3}</code>
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">summary_labels</td>
+          <td class="py-2 px-4 border-b">Array of String</td>
+          <td class="py-2 px-4 border-b">
+            รายการ label ทั้งหมดที่พบใน batch
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Video API -->
+  <section class="description-container">
+    <h2 class="text-2xl font-bold mb-4 text-primary">
+      API สำหรับวิเคราะห์วิดีโอ (<code>/analyze-video</code>)
+    </h2>
+
+
+    <h3 class="text-xl font-semibold mt-6 mb-3">รายละเอียด Endpoint</h3>
+    <table class="min-w-full bg-white border border-gray-200 rounded-lg mb-6">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="py-2 px-4 border-b">หัวข้อ</th>
+          <th class="py-2 px-4 border-b">รายละเอียด</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">Method</td>
+          <td class="py-2 px-4 border-b">POST</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">Endpoint</td>
+          <td class="py-2 px-4 border-b">/analyze-video</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">ชื่อพารามิเตอร์</td>
+          <td class="py-2 px-4 border-b">video</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">ประเภท</td>
+          <td class="py-2 px-4 border-b">File</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">ประเภทไฟล์ที่รองรับ</td>
+          <td class="py-2 px-4 border-b">.mp4, .mov, .avi, .mkv, .webm</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-medium">ข้อกำหนดจำนวนไฟล์</td>
+          <td class="py-2 px-4 border-b">1 ไฟล์ต่อคำร้องขอ</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="text-xl font-semibold mt-6 mb-3">ตัวอย่างคำร้องขอ</h3>
+    <h4 class="font-medium mt-4">cURL</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>curl -X POST "https://objexify.dpdns.org/analyze-video" \
+  -H "Authorization: Bearer your_api_key_here" \
+  -F "video=@sample.mp4"</code></pre>
+
+    <h4 class="font-medium mt-4">Python (Flask / requests)</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>import requests
+
+url = "https://objexify.dpdns.org/analyze-video"
+headers = {"Authorization": "Bearer your_api_key_here"}
+files = {"video": open("sample.mp4", "rb")}
+
+response = requests.post(url, headers=headers, files=files)
+print(response.json())</code></pre>
+
+    <h4 class="font-medium mt-4">PHP</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>&lt;?php
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, 'https://objexify.dpdns.org/analyze-video');
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Authorization: Bearer your_api_key_here'
+]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, [
+    'video' => new CURLFile('sample.mp4')
+]);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+$response = curl_exec($ch);
+curl_close($ch);
+echo $response;
+?&gt;</code></pre>
+
+    <h4 class="font-medium mt-4">Java (Apache HttpClient)</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>HttpPost post = new HttpPost("https://objexify.dpdns.org/analyze-video");
+post.setHeader("Authorization", "Bearer your_api_key_here");
+
+HttpEntity multipart = MultipartEntityBuilder.create()
+    .addBinaryBody("video", new File("sample.mp4"))
+    .build();
+
+post.setEntity(multipart);
+// ... ส่ง request ผ่าน HttpClient แล้วอ่าน response</code></pre>
+
+    <h4 class="font-medium mt-4">Go (Golang)</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>body := &bytes.Buffer{}
+writer := multipart.NewWriter(body)
+
+file, _ := os.Open("sample.mp4")
+defer file.Close()
+part, _ := writer.CreateFormFile("video", "sample.mp4")
+io.Copy(part, file)
+writer.Close()
+
+req, _ := http.NewRequest("POST", "https://objexify.dpdns.org/analyze-video", body)
+req.Header.Set("Authorization", "Bearer your_api_key_here")
+req.Header.Set("Content-Type", writer.FormDataContentType())
+
+client := &http.Client{}
+resp, _ := client.Do(req)
+defer resp.Body.Close()
+
+result, _ := io.ReadAll(resp.Body)
+fmt.Println(string(result))</code></pre>
+
+    <h4 class="font-medium mt-4">Node.js (axios)</h4>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>const axios = require('axios');
+const fs = require('fs');
+const FormData = require('form-data');
+
+const formData = new FormData();
+formData.append('video', fs.createReadStream('sample.mp4'));
+
+axios.post('https://objexify.dpdns.org/analyze-video', formData, {
+  headers: {
+    ...formData.getHeaders(),
+    'Authorization': 'Bearer your_api_key_here'
+  }
+})
+.then(res => console.log(res.data))
+.catch(err => console.error(err));</code></pre>
+
+    <h3 class="text-xl font-semibold mt-6 mb-3">
+      ตัวอย่างผลลัพธ์ (Response)
+    </h3>
+    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto"><code>{
+  "status": "inappropriate",
+  "original_filename": "sample.mp4",
+  "processed_video_url": "https://cdn.example.com/processed/sample_bbox.mp4",
+  "processed_blurred_video_url": "https://cdn.example.com/processed/sample_blur.mp4",
+  "detections": [
+    {
+      "frame": 45,
+      "detections": [
+        {
+          "label": "weapon",
+          "confidence": 0.87,
+          "bbox": [200, 100, 300, 250],
+          "model_type": "violence_detector"
+        }
+      ]
+    },
+    {
+      "frame": 120,
+      "detections": [
+        {
+          "label": "cigarette",
+          "confidence": 0.76,
+          "bbox": [50, 80, 90, 120],
+          "model_type": "smoking_detector"
+        }
+      ]
+    }
+  ],
+  "summary": { "weapon": 1, "cigarette": 1 },
+  "summary_labels": ["weapon", "cigarette"],
+  "output_modes": ["bbox", "blur"]
+}</code></pre>
+
+    <h3 class="text-xl font-semibold mt-6 mb-3">
+      API Response Fields – <code>/analyze-video</code>
+    </h3>
+    <table class="min-w-full bg-white border border-gray-200 rounded-lg mb-6">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="py-2 px-4 border-b">Field</th>
+          <th class="py-2 px-4 border-b">Type</th>
+          <th class="py-2 px-4 border-b">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">status</td>
+          <td class="py-2 px-4 border-b">String</td>
+          <td class="py-2 px-4 border-b">
+            สถานะโดยรวมของการวิเคราะห์:
+            <code>"passed"</code> (ไม่พบเนื้อหาไม่เหมาะสม),
+            <code>"inappropriate"</code> (พบเนื้อหาไม่เหมาะสม)
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">original_filename</td>
+          <td class="py-2 px-4 border-b">String</td>
+          <td class="py-2 px-4 border-b">ชื่อไฟล์วิดีโอเดิมที่อัปโหลด</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">processed_video_url</td>
+          <td class="py-2 px-4 border-b">String or null</td>
+          <td class="py-2 px-4 border-b">URL วิดีโอที่ใส่ bounding box</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">
+            processed_blurred_video_url
+          </td>
+          <td class="py-2 px-4 border-b">String or null</td>
+          <td class="py-2 px-4 border-b">
+            URL วิดีโอที่เบลอพื้นที่เนื้อหาไม่เหมาะสม
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">detections</td>
+          <td class="py-2 px-4 border-b">Array of Object</td>
+          <td class="py-2 px-4 border-b">รายการ detections แยกตามเฟรม</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">frame</td>
+          <td class="py-2 px-4 border-b">Integer</td>
+          <td class="py-2 px-4 border-b">หมายเลขเฟรม (เริ่มจาก 0)</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">detections</td>
+          <td class="py-2 px-4 border-b">Array of Object</td>
+          <td class="py-2 px-4 border-b">รายการวัตถุที่ตรวจพบในเฟรมนั้น</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">label</td>
+          <td class="py-2 px-4 border-b">String</td>
+          <td class="py-2 px-4 border-b">ชื่อวัตถุที่ตรวจพบ</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">confidence</td>
+          <td class="py-2 px-4 border-b">Number</td>
+          <td class="py-2 px-4 border-b">ค่าความมั่นใจ</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">bbox</td>
+          <td class="py-2 px-4 border-b">Array of Number</td>
+          <td class="py-2 px-4 border-b">พิกัดกรอบ</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">model_type</td>
+          <td class="py-2 px-4 border-b">String</td>
+          <td class="py-2 px-4 border-b">โมเดลที่ใช้</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">summary</td>
+          <td class="py-2 px-4 border-b">Object</td>
+          <td class="py-2 px-4 border-b">
+            สรุปจำนวนครั้งที่ตรวจพบแต่ละ label ตลอดวิดีโอ เช่น
+            <code>{ "weapon": 3 }</code>
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">summary_labels</td>
+          <td class="py-2 px-4 border-b">Array of String</td>
+          <td class="py-2 px-4 border-b">รายการ label ที่ตรวจพบ</td>
+        </tr>
+        <tr>
+          <td class="py-2 px-4 border-b font-mono">output_modes</td>
+          <td class="py-2 px-4 border-b">Array of String</td>
+          <td class="py-2 px-4 border-b">
+            โหมด output ที่ใช้: <code>["bbox"]</code>, <code>["blur"]</code>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="mt-12 pt-6 border-t border-primary text-center text-gray-400 text-sm">
+    © 2026 คู่มือการใช้งาน API — สร้างขึ้นเพื่อการอ้างอิง
+  </footer>
+</body>
+
+</html>
