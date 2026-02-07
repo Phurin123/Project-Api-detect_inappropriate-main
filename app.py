@@ -1668,6 +1668,15 @@ async def _analyze_video_internal(
             detail="The uploaded video exceeds the 1-minute limit.",
         )
 
+    # ✅ ตรวจสอบ FPS ของวิดีโอ (จำกัด < 60 fps)
+    if fps >= 60:
+        # ลบไฟล์ชั่วคราวก่อนตอบกลับ error
+        remove_stored_file(saved_record)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="วิดีโอมี FPS สูงเกินไป (≥60 fps) กรุณาอัปโหลดวิดีโอที่มี FPS ต่ำกว่า 60 / Video FPS is too high (≥60 fps). Please upload a video with FPS below 60.",
+        )
+
     # prefer form-specified analysis_types when provided, otherwise use the api key's configured types
     if analysis_types_form:
         analysis_types = parse_analysis_types_value(analysis_types_form)
@@ -2308,7 +2317,15 @@ async def upload_receipt(
                 detail="ไม่พบคำสั่งซื้อที่ยังไม่ชำระเงินสำหรับคุณ",
             )
 
-        allowed_names = ["ภูรินทร์สุขมั่น", "ภูรินทร์", "สุขมั่น", "ภูรินทร์ สุขมั่น"]
+        allowed_names = [
+            "ภูรินทร์สุขมั่น",
+            "ภูรินทร์",
+            "สุขมั่น",
+            "นายภูรินทร์",
+            "นาย ภูรินทร์",
+            "นายภูรินทร์ สุขมั่น",
+            "นาย ภูรินทร์ สุขมั่น"
+        ]
         full_name_clean = full_name.strip().replace(" ", "").lower()
         allowed_names_clean = [name.replace(" ", "").lower() for name in allowed_names]
         if not any(name in full_name_clean for name in allowed_names_clean):
@@ -2441,6 +2458,7 @@ async def upload_receipt(
         }
 
         if plan == "premium":
+            # insert_data["expires_at"] = datetime.now(timezone.utc) + timedelta(seconds=30)
             insert_data["expires_at"] = datetime.now(timezone.utc) + relativedelta(
                 months=+duration_months
             )
