@@ -109,6 +109,15 @@ try:
 except ValueError:
     MAX_ANALYSIS_QUEUE = 10
 
+# File Upload Limits
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_VIDEO_SIZE = 100 * 1024 * 1024  # 100 MB
+MAX_ZIP_SIZE = 50 * 1024 * 1024  # 50 MB
+MAX_VIDEO_DURATION = 60  # seconds
+MAX_VIDEO_FPS = 30
+MAX_ZIP_FILES = 100
+MAX_ZIP_EXTRACTED_SIZE = 200 * 1024 * 1024 # Limit total extracted size to avoid zip bombs
+
 
 class ConcurrencyLimiter:
     def __init__(self, max_concurrency: int, max_waiting: int):
@@ -207,6 +216,88 @@ def allowed_image(filename: str) -> bool:
 
 def allowed_video(filename: str) -> bool:
     return Path(filename).suffix.lower() in ALLOWED_VIDEO_EXTENSIONS
+
+
+def validate_image_size(file_obj: BytesIO) -> None:
+    file_obj.seek(0, os.SEEK_END)
+    size = file_obj.tell()
+    file_obj.seek(0)
+    if size > MAX_IMAGE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Image file size exceeds limit of {MAX_IMAGE_SIZE/1024/1024}MB",
+        )
+
+
+def validate_zip_file(file_obj: BytesIO) -> None:
+    file_obj.seek(0, os.SEEK_END)
+    size = file_obj.tell()
+    file_obj.seek(0)
+    if size > MAX_ZIP_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"ZIP file size exceeds limit of {MAX_ZIP_SIZE/1024/1024}MB",
+        )
+    
+    try:
+        with zipfile.ZipFile(file_obj) as archive:
+            if len(archive.infolist()) > MAX_ZIP_FILES:
+                 raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"ZIP file contains too many files (limit: {MAX_ZIP_FILES})",
+                )
+            
+            total_extracted_size = sum(zinfo.file_size for zinfo in archive.infolist())
+            if total_extracted_size > MAX_ZIP_EXTRACTED_SIZE:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"ZIP file extracted content exceeds limit",
+                )
+                
+    except zipfile.BadZipFile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid ZIP file",
+        )
+    file_obj.seek(0)
+
+
+def validate_video_file(file_path: Path) -> None:
+    # Check file size
+    size = file_path.stat().st_size
+    if size > MAX_VIDEO_SIZE:
+         raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Video file size exceeds limit of {MAX_VIDEO_SIZE/1024/1024}MB",
+        )
+
+    # Check duration and FPS
+    capture = cv2.VideoCapture(str(file_path))
+    if not capture.isOpened():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not open video file for validation",
+        )
+    
+    try:
+        fps = capture.get(cv2.CAP_PROP_FPS)
+        frame_count = capture.get(cv2.CAP_PROP_FRAME_COUNT)
+        duration = frame_count / fps if fps > 0 else 0
+        
+        if duration > MAX_VIDEO_DURATION:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Video duration exceeds limit of {MAX_VIDEO_DURATION} seconds",
+            )
+            
+        if fps > MAX_VIDEO_FPS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Video FPS exceeds limit of {MAX_VIDEO_FPS}",
+            )
+            
+    finally:
+        capture.release()
 
 
 def send_email_message(subject: str, body: str, recipients: List[str]) -> None:
@@ -1279,6 +1370,13 @@ async def _analyze_image_internal(
             content = await upload.read()
             await upload.close()
 
+            # Validate file size/content
+            temp_io = BytesIO(content)
+            if extension == ".zip":
+                validate_zip_file(temp_io)
+            elif extension in ALLOWED_IMAGE_EXTENSIONS:
+                validate_image_size(temp_io)
+
             # ✅ สร้างชื่อสุ่มสำหรับบันทึกจริง
             random_name = f"img_{uuid.uuid4()}{extension}"
 
@@ -1653,29 +1751,11 @@ async def _analyze_video_internal(
     )  # Pass original_name
     temp_path = Path(saved_record["file_path"])
 
-    # ✅ ตรวจสอบความยาววิดีโอ (จำกัด ≤ 60 วินาที)
-    cap = cv2.VideoCapture(str(temp_path))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-    duration = frame_count / fps if fps > 0 else 0
-    cap.release()
-
-    if duration > 60:
-        # ลบไฟล์ชั่วคราวก่อนตอบกลับ error
+    try:
+        validate_video_file(temp_path)
+    except HTTPException:
         remove_stored_file(saved_record)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The uploaded video exceeds the 1-minute limit.",
-        )
-
-    # ✅ ตรวจสอบ FPS ของวิดีโอ (จำกัด < 60 fps)
-    if fps >= 60:
-        # ลบไฟล์ชั่วคราวก่อนตอบกลับ error
-        remove_stored_file(saved_record)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="วิดีโอมี FPS สูงเกินไป (≥60 fps) กรุณาอัปโหลดวิดีโอที่มี FPS ต่ำกว่า 60 / Video FPS is too high (≥60 fps). Please upload a video with FPS below 60.",
-        )
+        raise
 
     # prefer form-specified analysis_types when provided, otherwise use the api key's configured types
     if analysis_types_form:
