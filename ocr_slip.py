@@ -308,26 +308,54 @@ class AdvancedSlipOCR:
             return False
 
     def extract_amount(self, text: str) -> Optional[str]:
+    # ปรับ pattern ให้เฉพาะเจาะจงขึ้น
         amount_patterns = [
-            r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿|THB|baht)",
-            r"(?:ราคา|จำนวน|ยอด|รวม|Total|Amount|Price)[:\s]*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)",
-            r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(?:บาท|฿|THB|baht)?",
+            # 1. มีคำนำหน้าชัดเจน + ตัวเลข
+            r"(?:จำนวน|ยอดเงิน|จำนวนเงิน|ยอด|รวม|Total|Amount|Price|เงิน)[\s:]*([\d,]+(?:\.\d{1,2})?)",
+            # 2. มีสัญลักษณ์เงิน (บาท, ฿)
+            r"([\d,]+(?:\.\d{1,2})?)\s*(?:บาท|฿|THB|baht)",
+            # 3. รูปแบบทั่วไป แต่ต้องมีทศนิยม (ลดโอกาสจับวันที่)
+            r"([\d,]+\.?\d{1,2})\s*(?:บาท|฿)?",
         ]
+        
+        candidates = []
+        
         for pattern in amount_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
-            if matches:
-                for match in matches:
-                    amount = match[0] if isinstance(match, tuple) else match
-                    amount_clean = re.sub(r"[^\d,\.]", "", amount)
-                    if amount_clean:
-                        return amount_clean
-        return None
+            for match in matches:
+                amount_str = match if isinstance(match, str) else match[0]
+                # ลบเครื่องหมายจุลภาค
+                clean_num = re.sub(r"[^\d.]", "", amount_str)
+                try:
+                    value = float(clean_num)
+                    # กรองค่าที่ไม่น่าเป็นเงิน (เช่น 0-99 อาจเป็นวัน/เดือน แต่ถ้ามี .xx ให้ผ่าน)
+                    if '.' in clean_num or value >= 100:
+                        candidates.append((value, clean_num))
+                    elif value >= 10:  # ยอมรับ 10-99 ถ้าไม่มีทางเลือกอื่น
+                        candidates.append((value, clean_num))
+                except ValueError:
+                    continue
+
+        if not candidates:
+            return None
+
+        # เรียงจากค่ามาก → น้อย (หรือเลือกค่าที่มีทศนิยมก่อน)
+        candidates.sort(key=lambda x: (-('.' in x[1]), -x[0]))
+        return candidates[0][1]
 
     def extract_name(
         self, text: str, expected_names: List[str] = None
     ) -> Optional[str]:
         if expected_names is None:
-            expected_names = ["ภูรินทร์สุขมั่น", "ภูรินทร์", "สุขมั่น"]
+            expected_names = [
+            "ภูรินทร์สุขมั่น",
+            "ภูรินทร์",
+            "สุขมั่น",
+            "นายภูรินทร์",
+            "นาย ภูรินทร์",
+            "นายภูรินทร์ สุขมั่น",
+            "นาย ภูรินทร์ สุขมั่น"
+        ]
         thai_words = re.findall(r"[ก-๙]{2,}", text)
         best_match = None
         best_score = 0
@@ -395,15 +423,23 @@ class AdvancedSlipOCR:
 def main():
     ocr = AdvancedSlipOCR()
     kasikor = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กสิกร.jpeg"
+    kasikor2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กสิกร.jpeg"
     krungthai = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กรุงไทย.jpg"
+    krungthai2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กรุงไทย.jpg"
     krungthep = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กรุงเทพ.webp"
+    krungthep2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กรุงเทพเเก้.png"
     krungsri = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กรุงศรี.webp"
+    krungsri2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กรุงศรีเเก้.png"
     thaipanit = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ไทยพาณิชย์.webp"
+    thaipanit2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ไทยพาณิชย์เเก้.png"
     aomsin = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ออมสิน.jpg"
+    aomsin2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ออมสินเเก้.png"
     isaram = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\อิสลาม.png"
+    isaram2  = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\อิสลามเเก้.png"
     thanachat = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ธนชาติ.png"
+    thanachat2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ธนชาติเเก้.png"
 
-    image_path = kasikor
+    image_path = kasikor2
 
     if os.path.exists(image_path):
         image = cv2.imread(image_path)

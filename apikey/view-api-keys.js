@@ -351,7 +351,7 @@ async function fetchApiKeys() {
 
     if (!response.ok || data.error) {
 
-        throw new Error(data.error || 'เกิดข้อผิดพลาดในการดึงข้อมูล API Keys');
+        throw new Error(data.error || 'คุณยังไม่ได้สร้างAPI Keys');
 
     }
 
@@ -722,7 +722,7 @@ async function loadApiKeysWithHistory() {
         console.error('Error loading API key data:', error);
         const fallbackMessage = error && error.message ?
             error.message :
-            'เกิดข้อผิดพลาดในการดึงข้อมูล API Keys';
+            'คุณยังไม่ได้สร้าง API Keys';
         listElement.innerHTML = `<p>${escapeHtml(fallbackMessage)}</p>`;
     }
 

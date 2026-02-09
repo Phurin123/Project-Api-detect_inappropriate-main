@@ -1,51 +1,50 @@
 ﻿<!doctype html>
 <html lang="th">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Your API Keys</title>
-    <link rel="stylesheet" href="../menubar/menubar.css" />
-    <link rel="stylesheet" href="../homepage/particles-bg.css" />
-    <link rel="stylesheet" href="view-api-keys.css" />
-    <script src="../menubar/menubar-class.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
-    <script src="../homepage/partcles-html.js" defer></script>
-    <link rel="stylesheet" href="../homepage/particles-bg.css" />
-    <link rel="stylesheet" href="../homepage/partcles-css.css" />
-  </head>
 
-  <body>
-    <div id="menubar"></div>
-    <div id="particles-js"></div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your API Keys</title>
+  <link rel="stylesheet" href="../menubar/menubar.css" />
+  <link rel="stylesheet" href="../homepage/particles-bg.css" />
+  <link rel="stylesheet" href="view-api-keys.css" />
+  <script src="../menubar/menubar-class.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+  <script src="../homepage/partcles-html.js" defer></script>
+  <link rel="stylesheet" href="../homepage/particles-bg.css" />
+  <link rel="stylesheet" href="../homepage/partcles-css.css" />
+</head>
 
-    <div class="container">
-      <!-- แสดงชื่อผู้ใช้ -->
-      <p
-        id="usernameDisplay"
-        style="
+<body>
+  <div id="menubar"></div>
+  <div id="particles-js"></div>
+
+  <div class="container">
+    <!-- แสดงชื่อผู้ใช้ -->
+    <p id="usernameDisplay" style="
           text-align: center;
           font-weight: bold;
           margin-bottom: 10px;
           font-size: 24px;
-        "
-      ></p>
+        "></p>
 
-      <h2>Your API Keys</h2>
+    <h2>Your API Keys</h2>
 
-      <!-- ปุ่ม Create API Key -->
-      <div style="text-align: center; margin-bottom: 30px">
-        <a href="../plan/plan.html">
-          <button>Create API Key</button>
-        </a>
-      </div>
-
-      <!-- ปุ่ม Logout -->
-      <!-- รายการ API Keys -->
-      <div id="apiKeysList">
-        <!-- ข้อมูล API Keys จะแสดงที่นี่ -->
-      </div>
+    <!-- ปุ่ม Create API Key -->
+    <div style="text-align: center; margin-bottom: 30px">
+      <a href="../plan/plan.html">
+        <button>Create API Key</button>
+      </a>
     </div>
-    <script src="../config.js"></script>
-    <script src="view-api-keys.js"></script>
-  </body>
+
+    <!-- ปุ่ม Logout -->
+    <!-- รายการ API Keys -->
+    <div id="apiKeysList">
+      <!-- ข้อมูล API Keys จะแสดงที่นี่ -->
+    </div>
+  </div>
+  <script src="../config.js"></script>
+  <script src="view-api-keys.js"></script>
+</body>
+
 </html>
