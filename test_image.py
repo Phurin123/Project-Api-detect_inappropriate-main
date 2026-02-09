@@ -9,9 +9,7 @@ from ultralytics import YOLO
 # 1. ตั้งค่าพื้นฐาน (Configuration)
 # ==========================================
 input_folder = r"C:\Users\lovew\Downloads\Test_violance"
-model_path = (
-    r"C:\Users\lovew\Downloads\istockphoto-1447876057-640_adpp_is.mp4"
-)
+model_path = r"C:\Users\lovew\OneDrive\Desktop\project\project-api-19_12_2568_comserver_main\models\รุนเเรงงงงงๆๆๆๆๆ.pt"
 output_dir = "all_results"
 rows = 6
 resize_to = (320, 240)
