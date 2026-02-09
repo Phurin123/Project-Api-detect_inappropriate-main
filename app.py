@@ -1,5 +1,6 @@
 import base64
 import asyncio
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -1347,6 +1348,7 @@ async def _analyze_image_internal(
     thresholds: Optional[str],
     output_modes: Optional[str],
 ):
+    start_time = time.time()
     files_payload: List[Dict[str, str]] = []
     skipped_entries: List[Dict[str, Any]] = []
     MAX_TOTAL_IMAGES = 100
@@ -1682,6 +1684,8 @@ async def _analyze_image_internal(
                 }
             )
 
+        end_time = time.time()
+        print(f"Image processing time: {end_time - start_time:.2f} seconds")
         return JSONResponse(response_payload)
 
     except HTTPException:
@@ -1738,6 +1742,7 @@ async def _analyze_video_internal(
     analysis_types_form: Optional[str],
     thresholds_form: Optional[str],
 ):
+    start_time = time.time()
     original_name = sanitize_filename(video.filename)  # Define original_name
     if not allowed_video(original_name):
         await video.close()
@@ -1862,6 +1867,8 @@ async def _analyze_video_internal(
             {"filename": saved_record["stored_filename"]}
         )
 
+        end_time = time.time()
+        print(f"Video processing time: {end_time - start_time:.2f} seconds")
         return {
             "status": status_result,
             "original_filename": original_name,

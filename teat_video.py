@@ -2,13 +2,18 @@ import cv2
 from ultralytics import YOLO
 
 # โหลดโมเดลที่คุณ train ไว้
-model = YOLO(r"C:\Users\lovew\OneDrive\Desktop\project\project-api-19_12_2568_comserver_main\models\รุนเเรงงงงงๆๆๆๆๆ.pt")
+model = YOLO(
+    r"C:\Users\lovew\Downloads\เสร็จแล้วความรุนแรง\เสร็จแล้วความรุนแรง\10%\best (3).pt"
+)
 
 # เปิดวิดีโอ
-cap = cv2.VideoCapture(r"C:\Users\lovew\Downloads\556412.mp4")
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter("output_blurred.mp4", fourcc, cap.get(5),
-                      (int(cap.get(3)), int(cap.get(4))))
+cap = cv2.VideoCapture(
+    r"C:\Users\lovew\Downloads\6014333_People_Men_3840x2160.mp4"
+)
+fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+out = cv2.VideoWriter(
+    "output_blurred.mp4", fourcc, cap.get(5), (int(cap.get(3)), int(cap.get(4)))
+)
 
 while True:
     ret, frame = cap.read()
