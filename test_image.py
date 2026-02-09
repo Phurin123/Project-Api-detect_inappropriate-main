@@ -8,8 +8,8 @@ from ultralytics import YOLO
 # ==========================================
 # 1. ตั้งค่าพื้นฐาน (Configuration)
 # ==========================================
-input_folder = r"C:\Users\lovew\Downloads\Test_violance"
-model_path = r"C:\Users\lovew\OneDrive\Desktop\project\project-api-19_12_2568_comserver_main\models\รุนเเรงงงงงๆๆๆๆๆ.pt"
+input_folder = r"C:\Users\khongkaphan\Downloads\testvioret"
+model_path = r"C:\Users\khongkaphan\Music\ความรุนแรงจบ\violance-2700\เสร็จแล้วความรุนแรง\10%\best (3).pt"
 output_dir = "all_results"
 rows = 6
 resize_to = (320, 240)

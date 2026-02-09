@@ -567,7 +567,7 @@ models = {
     "porn": load_model("โป๊เปลือยดีจัดเลียๆๆๆๆ.pt"),
     "weapon": load_model("อาวุธดีจัดปั้งงงงงๆ.pt"),
     "cigarette": load_model("บุหรี่ของดีจัดสูดๆๆๆ.pt"),
-    "violence": load_model("violence-pose.pt"),
+    "violence": load_model("โป๊เปลือยดีจัดเลียๆๆๆๆ.pt"),
 }
 
 

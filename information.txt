@@ -1,6 +1,6 @@
 รัน python
 uvicorn app:app --reload
-python -m uvicorn app:app --reload
+python -m uvicorn app:app --reload --port 5000
 
 git/github
 git init
