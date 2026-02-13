@@ -181,8 +181,38 @@ async function validateVideoDuration(file) {
   });
 }
 
+// Add validation for video file size
+async function validateVideoFileSize(file) {
+  const MAX_VIDEO_SIZE_MB = 100;
+  const maxBytes = MAX_VIDEO_SIZE_MB * 1024 * 1024;
+  
+  if (file.size > maxBytes) {
+    alert(`ไฟล์วิดีโอมีขนาดใหญ่เกินไป\nขนาดสูงสุด: ${MAX_VIDEO_SIZE_MB}MB\nขนาดปัจจุบัน: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+    return false;
+  }
+  return true;
+}
+
+// Add validation for image file size
+function validateImageFileSize(file) {
+  const MAX_IMAGE_SIZE_MB = 10;
+  const maxBytes = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+  
+  if (file.size > maxBytes) {
+    alert(`ไฟล์รูปภาพมีขนาดใหญ่เกินไป\nขนาดสูงสุด: ${MAX_IMAGE_SIZE_MB}MB\nขนาดปัจจุบัน: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+    return false;
+  }
+  return true;
+}
+
 async function processMultipleImages(files) {
   if (!validateImageUploadCount(files)) return;
+
+  // Validate file sizes for non-zip files
+  const nonZipFiles = files.filter(f => !f.name.toLowerCase().endsWith('.zip'));
+  for (const file of nonZipFiles) {
+    if (!validateImageFileSize(file)) return;
+  }
 
   const selection = collectModelSelections();
   if (!selection) return;
@@ -234,6 +264,12 @@ async function processMultipleImages(files) {
     });
 
     const data = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = data.detail || data.error || 'เกิดข้อผิดพลาดในการประมวลผลรูปภาพ';
+      setResultMessage(`❌ ${errorMessage}`, 'error');
+      return;
+    }
 
     if (response.ok) {
       // Handle multi-result response
@@ -314,8 +350,6 @@ async function processMultipleImages(files) {
         `เสร็จสิ้น! ประมวลผล ${results.length} รูป | ✅ ผ่าน: ${successCount} | ❌ ไม่ผ่าน: ${inappropriateCount}`,
         finalStatus
       );
-    } else {
-      setResultMessage(`ข้อผิดพลาด: ${data.error || 'เกิดข้อผิดพลาด'}`, 'error');
     }
   } catch (error) {
     setResultMessage(`ข้อผิดพลาด: ${error.message || 'ไม่สามารถประมวลผลได้'}`, 'error');
@@ -333,6 +367,9 @@ async function uploadVideo() {
   input.onchange = async () => {
     const file = input.files?. [0];
     if (!file) return;
+
+    const isValidFileSize = await validateVideoFileSize(file);
+    if (!isValidFileSize) return;
 
     const isValid = await validateVideoDuration(file);
     if (!isValid) return;
@@ -367,6 +404,13 @@ async function uploadVideo() {
       });
 
       const data = await response.json();
+      
+      if (!response.ok) {
+        const errorMessage = data.detail || data.error || 'เกิดข้อผิดพลาดในการประมวลผลวิดีโอ';
+        setResultMessage(`❌ ${errorMessage}`, 'error');
+        return;
+      }
+      
       if (response.ok) {
         const status = (data.status || '').toLowerCase();
         const summaryLabels = Array.isArray(data.summary_labels) ?
@@ -377,17 +421,31 @@ async function uploadVideo() {
         );
         const resolvedStatus =
           status || (labels.length ? 'inappropriate' : 'passed');
-        const labelsSuffix = labels.length ? ` | รายการตรวจพบ: ${labels.join(', ')}` : '';
+        const detectionRatio = data.detection_ratio !== undefined ? data.detection_ratio : null;
+        const detectionPercentage = detectionRatio !== null ? (detectionRatio * 100).toFixed(1) : null;
+        
+        let labelsSuffix = '';
+        if (labels.length) {
+          labelsSuffix = ` | รายการตรวจพบ: ${labels.join(', ')}`;
+        }
+        
+        let ratioSuffix = '';
+        if (detectionPercentage !== null) {
+          if (detectionRatio < 0.3) {
+            ratioSuffix += ' (ไม่เกิน 30%)';
+          }
+        }
+        
         const noLabelsSuffix = ' | ไม่พบวัตถุที่ตรงตามเงื่อนไข';
 
         if (resolvedStatus === 'inappropriate') {
           setResultMessage(
-            `ผลลัพธ์: ไม่ผ่านการทดสอบ${labelsSuffix || noLabelsSuffix}`,
+            `ผลลัพธ์: ไม่ผ่านการทดสอบ${labelsSuffix || noLabelsSuffix}${ratioSuffix}`,
             'error',
           );
         } else {
           const successSuffix = labelsSuffix || noLabelsSuffix;
-          setResultMessage(`ผลลัพธ์: ผ่านการทดสอบ${successSuffix}`, 'success');
+          setResultMessage(`ผลลัพธ์: ผ่านการทดสอบ${successSuffix}${ratioSuffix}`, 'success');
         }
 
         if (data.processed_video_url && processedVideo) {
@@ -409,8 +467,6 @@ async function uploadVideo() {
             container.style.display = 'block';
           }
         }
-      } else {
-        setResultMessage(`ข้อผิดพลาด: ${data.error || 'เกิดข้อผิดพลาด'}`, 'error');
       }
     } catch (error) {
       setResultMessage('ข้อผิดพลาด: ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์', 'error');
@@ -495,6 +551,12 @@ async function uploadImageFromURL() {
       type: blob.type
     });
 
+    // Validate file size
+    if (!validateImageFileSize(file)) {
+      setLoadingState(false);
+      return;
+    }
+
     const formData = new FormData();
     formData.append('images', file);
     formData.append('analysis_types', JSON.stringify(selectedModels));
@@ -522,6 +584,14 @@ async function uploadImageFromURL() {
     });
 
     const data = await apiResponse.json();
+    
+    if (!apiResponse.ok) {
+      const errorMessage = data.detail || data.error || 'เกิดข้อผิดพลาดในการประมวลผลรูปภาพ';
+      setResultMessage(`❌ ${errorMessage}`, 'error');
+      setLoadingState(false);
+      return;
+    }
+    
     if (apiResponse.ok) {
       const detections = Array.isArray(data.detections) ? data.detections : [];
       const labels = collectUniqueLabels(detections);
@@ -553,8 +623,6 @@ async function uploadImageFromURL() {
       if (urlInput) {
         urlInput.value = '';
       }
-    } else {
-      setResultMessage(`ข้อผิดพลาด: ${data.error || 'เกิดข้อผิดพลาด'}`, 'error');
     }
   } catch (error) {
     setResultMessage(`ข้อผิดพลาด: ${error.message || 'ไม่สามารถดาวน์โหลดหรือประมวลผลรูปภาพได้'}`, 'error');

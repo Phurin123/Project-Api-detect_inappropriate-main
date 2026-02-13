@@ -104,7 +104,7 @@ except ValueError:
     MAX_CONCURRENT_ANALYSIS = 2
 
 try:
-    MAX_ANALYSIS_QUEUE = int(os.getenv("MAX_ANALYSIS_QUEUE", "10"))
+    MAX_ANALYSIS_QUEUE = int(os.getenv("MAX_ANALYSIS_QUEUE", "3"))
     if MAX_ANALYSIS_QUEUE < 0:
         MAX_ANALYSIS_QUEUE = 0
 except ValueError:
@@ -656,10 +656,10 @@ def load_model(model_name: str) -> YOLO:
 
 
 models = {
-    "porn": load_model("โป๊เปลือยดีจัดเลียๆๆๆๆ.pt"),
-    "weapon": load_model("อาวุธดีจัดปั้งงงงงๆ.pt"),
-    "cigarette": load_model("บุหรี่ของดีจัดสูดๆๆๆ.pt"),
-    "violence": load_model("โป๊เปลือยดีจัดเลียๆๆๆๆ.pt"),
+    "porn": load_model("porn m 100 loop.pt"),
+    "weapon": load_model("best weapon.pt"),
+    "cigarette": load_model("เทรนเสร็จบุหรี่10.pt"),
+    "violence": load_model("best รุนแรง2700.pt"),
 }
 
 
@@ -1880,6 +1880,7 @@ async def _analyze_video_internal(
             "output_modes": (
                 list(output_modes_config) if output_modes_config else ["bbox", "blur"]
             ),
+            "detection_ratio": detection_ratio,
         }
     except Exception as exc:
         # ในกรณี error ระหว่างประมวลผล → ลบไฟล์ชั่วคราว

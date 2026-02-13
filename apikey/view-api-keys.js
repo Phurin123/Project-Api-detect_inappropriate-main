@@ -566,7 +566,7 @@ function createHistorySection(historyId, historyContent) {
 
             <div class="history-list" id="${historyId}" aria-hidden="true">
                     <p class="history-warning" style="color: #ffca28; font-size: 0.9em; margin: 10px 0; font-style: italic;">
-                    ⚠️ Note: Images and videos will be removed from the database within 1 day
+                    ⚠️ Note: Images and videos will be removed from the database within 7 day
                 </p>
                 ${historyContent}
             </div>
