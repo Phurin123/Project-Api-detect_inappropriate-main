@@ -187,6 +187,7 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
 
+# สาเหตุที่ใช้ mongodb เพราะ ไม่ต้องกำหนด schema ล่วงหน้า กัน sql injection เเละมี ฟีเจอร์ expire data อัตโนมัติ
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 client: MongoClient = MongoClient(MONGO_URI)
 db: Database = client["api_database"]
@@ -331,6 +332,9 @@ def send_email_message(subject: str, body: str, recipients: List[str]) -> None:
         server.send_message(msg)
 
 
+# กรณีที่ 1: ส่ง JSON (เช่น จาก frontend หรือ mobile app
+# กรณีที่ 2: ส่ง Form Data (เช่น จาก HTML form หรือ Postman แบบ form-data
+# หากคุณบังคับให้ส่งแค่ JSON อย่างเดียว → ผู้ใช้บางคน (เช่น ใช้ curl หรือ HTML form) จะใช้งานไม่ได้
 async def extract_request_payload(
     request: Request,
 ) -> Dict[str, Any]:  # ดึงข้อมูลจาก request
@@ -373,6 +377,8 @@ def save_bytes_to_uploads(
     }
 
 
+# ไฟล์หลัก (ที่ user อัปโหลด) → ใช้ save_upload_file
+# ไฟล์ย่อยใน ZIP → ใช้ save_bytes_to_uploads
 # เหตุผลที่ต้องเเยก input (Type ต่างกัน)
 # UploadFile → (อ่านเป็น bytes) → เขียนลง disk ใช้กับ /upload
 async def save_upload_file(
@@ -417,6 +423,7 @@ def remove_stored_file(file_record: Dict[str, Any]) -> None:
 
 
 # แยก range header ออกเป็น start, end เช่น เวลาคุณดูวิดีโอในเว็บ คุณลากไปนาทีที่ 10 ถ้าไม่มีฟังก์ชันนี้ วิดีโอจะลาก timeline ไม่ได้
+# ตัวอย่าง range_header = "bytes=2000-3000" file_size = 5000 ขอช่วงกลางคลิปวิดีโอ
 def parse_range_header(range_header: str, file_size: int) -> Optional[Tuple[int, int]]:
     if not range_header or not range_header.startswith(
         "bytes="
@@ -432,7 +439,7 @@ def parse_range_header(range_header: str, file_size: int) -> Optional[Tuple[int,
         if start_str:  # ถ้ามี start
             start = int(start_str)
         else:
-            length = int(end_str)  # ถ้าไม่มี start ให้เอา length แทน
+            length = int(end_str)  # ถ้าไม่มี ให้เอาท้ายไฟล์ไปเริ่มต้นจากความยาวที่ระบุ
             if length <= 0:
                 return None
             start = max(file_size - length, 0)
@@ -450,6 +457,8 @@ def parse_range_header(range_header: str, file_size: int) -> Optional[Tuple[int,
     return start, end
 
 
+# chunk คือการแบ่งข้อมูลใหญ่ ๆ ออกเป็น ก้อนเล็ก ๆ (ชิ้นส่วน) เพื่อส่งหรือประมวลผลทีละส่วน
+# โหลดทีเดียวทั้งไฟล์ → ช้ามาก + กิน RAM
 # อ่านไฟล์ทีละก้อน (chunk) แบบสตรีมทำให้ประหยัดเเรม
 def iter_file_chunks(path: Path, start: int, end: int) -> Iterable[bytes]:
     with path.open("rb") as file_obj:
@@ -490,7 +499,9 @@ class ImageIOVideoWriter:
         if self._closed:
             return
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # แปลง BGR เป็น RGB
-        self._writer.append_data(rgb_frame)
+        self._writer.append_data(
+            rgb_frame
+        )  # BGR → RGB เพราะ imageio ต้องการรูปแบบ RGB แต่ OpenCV ใช้ BGR เป็นค่าเริ่มต้น
 
     # ปิด writer
     def release(self) -> None:
@@ -514,6 +525,10 @@ def create_video_writer(path: Path, fps: float, width: int, height: int):
     raise RuntimeError(f"Unable to initialize video writer for {path.name}")
 
 
+# moov = สารบัญ, mdat = เนื้อเรื่อง
+# เวลาเครื่องบันทึกวิดีโอสร้างไฟล์ → มันวาง เนื้อเรื่องก่อน, แล้วค่อยใส่ สารบัญไว้ท้ายสุด → เหมือนหนังสือที่ สารบัญอยู่หน้าสุดท้าย!
+# ย้ายสารบัญไปหน้า → เล่นวิดีโอได้ทันทีโดยไม่ต้องโหลดทั้งไฟล์
+# แต่ต้อง แก้เลขในสารบัญ ให้ตรงกับตำแหน่งใหม่ → ไม่งั้นชี้ผิด!
 # ถ้าเราเลื่อนตำแหน่งข้อมูลในไฟล์ ต้องไปแก้ตัวเลขชี้ตำแหน่งข้างในด้วย
 def patch_moov_offsets_inplace(buffer: memoryview, shift: int) -> None:
     container_atoms = {
@@ -842,7 +857,7 @@ def process_selected_models(
     return output_bbox_image, output_blur_image, detections
 
 
-# ฟังก์ชันประมวลผลภาพ
+# ตัวกลางสำหรับโหลดภาพ → แปลงรูปแบบ → ส่งไปให้ AI models ประมวลผล
 def process_image_file_for_models(
     file_path: str, model_types: List[str], thresholds: Dict[str, float]
 ) -> Tuple[Image.Image, Image.Image, List[Dict[str, Any]]]:
@@ -852,7 +867,7 @@ def process_image_file_for_models(
     return process_selected_models(image_rgb, model_types, thresholds)  # ประมวลผลภาพ
 
 
-# ฟังก์ชันประมวลผลวิดีโอ จัดดาต้าเป็นเฟรม แล้วส่งไปให้โมเดลประมวลผลทีละเฟรม แล้วเอาผลลัพธ์มาวาด bounding box หรือเบลอภาพตามที่เลือก สุดท้ายเอาเฟรมที่ประมวลผลแล้วมาต่อกันเป็นวิดีโอใหม่
+# อ่านวิดีโอ → แยกเป็นเฟรม → รัน AI บางเฟรม → วาดผล/เบลอ → รวมกลับเป็นวิดีโอใหม่
 def process_video_media(
     video_path: Path,
     model_types: List[str],
@@ -1267,6 +1282,8 @@ async def signup(request: Request) -> JSONResponse:
 
 MAX_FAILED_ATTEMPTS = 10
 LOCKOUT_DURATION_MINUTES = 30
+
+
 # ล็อกอิน
 @app.post("/login")
 async def login(request: Request) -> JSONResponse:
@@ -1283,13 +1300,16 @@ async def login(request: Request) -> JSONResponse:
     user = users_collection.find_one({"email": email})
     if not user:
         return JSONResponse(
-            {"error": "Invalid credentials"}, 
-            status_code=status.HTTP_400_BAD_REQUEST
+            {"error": "Invalid credentials"}, status_code=status.HTTP_400_BAD_REQUEST
         )
 
     # ตรวจสอบว่าบัญชีถูกล็อกหรือไม่
     locked_until = user.get("locked_until")
-    if locked_until and isinstance(locked_until, datetime) and locked_until > datetime.utcnow():
+    if (
+        locked_until
+        and isinstance(locked_until, datetime)
+        and locked_until > datetime.utcnow()
+    ):
         remaining = (locked_until - datetime.utcnow()).total_seconds()
         return JSONResponse(
             {
@@ -1314,10 +1334,7 @@ async def login(request: Request) -> JSONResponse:
             lock_time = datetime.utcnow() + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
             update_fields["locked_until"] = lock_time
         # อัปเดตข้อมูล
-        users_collection.update_one(
-            {"email": email},
-            {"$set": update_fields}
-        )
+        users_collection.update_one({"email": email}, {"$set": update_fields})
         return JSONResponse(
             {"error": "Invalid credentials"},
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1326,7 +1343,7 @@ async def login(request: Request) -> JSONResponse:
     # ล็อกอินสำเร็จ → รีเซ็ต attempts และลบ lock
     users_collection.update_one(
         {"email": email},
-        {"$set": {"failed_login_attempts": 0}, "$unset": {"locked_until": ""}}
+        {"$set": {"failed_login_attempts": 0}, "$unset": {"locked_until": ""}},
     )
 
     token = generate_token(email)
@@ -1865,6 +1882,7 @@ async def _analyze_image_internal(
         )
 
 
+# เหตุผลที่ต้องเเยก route ก็เพราะว่า วิดีโอมีการคำนวณ ratio เเต่รูปภาพไม่มี เเละทำให้ config ค่าได้ง่าย
 @app.post("/analyze-video")
 async def analyze_video(
     request: Request,
@@ -2316,6 +2334,7 @@ async def get_api_key_history(
 
     return {"history": history}
 
+
 # ดึง username
 @app.get("/get-username")
 async def get_username(current_user: Dict[str, Any] = Depends(get_current_user)):
@@ -2343,6 +2362,7 @@ def download_manual() -> FileResponse:
         )
     return FileResponse(file_path)
 
+
 # สร้าง QR code
 def generate_qr_code(promptpay_id: str, amount: float = 0) -> str:
     if amount > 0:
@@ -2357,6 +2377,7 @@ def generate_qr_code(promptpay_id: str, amount: float = 0) -> str:
     img_str = base64.b64encode(buffered.getvalue()).decode()
 
     return f"data:image/png;base64,{img_str}"
+
 
 # สร้าง QR code
 @app.post("/generate_qr")
@@ -2416,7 +2437,7 @@ async def generate_qr(
     # ตรวจสอบว่ามีการสั่งซื้อที่ยังไม่ได้ชำระเงิน
     existing_unpaid_order = orders_collection.find_one({"email": email, "paid": False})
     if existing_unpaid_order:
-        # Compare request ว่าเหมือนเดิมไหม 
+        # Compare request ว่าเหมือนเดิมไหม
         matches_request = (
             existing_unpaid_order.get("plan") == "premium"
             and existing_unpaid_order.get("package") == package_raw
@@ -2477,6 +2498,7 @@ async def generate_qr(
         "media_access": media_access,
     }
 
+
 # เมื่อผู้ใช้ไม่ได้อัป slip เข้ามาภายใน 5 นาที ระบบจะยกเลิกคำสั่งซื้อ
 @app.post("/cancel-order")
 async def cancel_order(
@@ -2520,7 +2542,8 @@ def check_qrcode(image_path: str) -> bool:
     print(f"[DEBUG] QR data: {repr(data)}")
     return points is not None and bool(data)
 
-# ตรวจสอบข้อมูลใน slip 
+
+# ตรวจสอบข้อมูลใน slip
 @app.post("/upload-receipt")
 async def upload_receipt(
     receipt: UploadFile = File(...),
@@ -2851,6 +2874,7 @@ async def google_callback(request: Request, code: Optional[str] = None):
     )
     return RedirectResponse(redirect_url)
 
+
 # ขอ OTP
 @app.post("/reset-request")
 async def reset_request(
@@ -2871,6 +2895,7 @@ async def reset_request(
 
     send_email_message("OTP สำหรับรีเซ็ตรหัสผ่าน", f"รหัส OTP ของคุณคือ: {otp}", [email])
     return {"message": "ส่ง OTP แล้ว"}
+
 
 # ตรวจสอบ OTP
 @app.post("/verify-otp")
@@ -2893,6 +2918,7 @@ async def verify_otp(payload: Dict[str, Any]):
     otp_collection.update_one({"email": email, "otp": otp}, {"$set": {"used": True}})
 
     return {"message": "OTP ถูกต้อง"}
+
 
 # รีเซ็ตรหัสผ่าน
 @app.post("/reset-password")
@@ -2970,6 +2996,7 @@ async def reset_password(payload: Dict[str, Any]):
 
     return {"message": "รีเซ็ตรหัสผ่านเรียบร้อยแล้ว"}
 
+
 # เส้นทางไฟล์
 @app.get("/{filename:path}")
 def serve_other_files(filename: str) -> FileResponse:
@@ -2979,6 +3006,7 @@ def serve_other_files(filename: str) -> FileResponse:
             status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
         )
     return FileResponse(file_path)
+
 
 # ลบไฟล์ที่หมดอายุ
 def cleanup_expired_files() -> None:
@@ -2999,6 +3027,7 @@ def cleanup_expired_files() -> None:
                 print(f"Error deleting {fname}: {exc}")
     except Exception as exc:
         print(f"Cleanup system error: {exc}")
+
 
 # เริ่มต้นการลบไฟล์ที่หมดอายุ
 def start_cleanup_scheduler() -> None:
