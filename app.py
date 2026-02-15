@@ -214,7 +214,7 @@ PREMIUM_PLAN_PACKAGES: Dict[str, Dict[str, Any]] = {
     "both": {"media_access": ["image", "video"], "monthly_price": 159},
 }
 
-# Video processing optimization: process every Nth frame
+# จำนวนเฟรมที่ข้ามไปเมื่อวิเคราะห์วิดีโอ (ยิ่งมาก ยิ่งเร็วแต่ความแม่นยำลดลง)
 try:
     VIDEO_FRAME_SKIP = max(int(os.getenv("VIDEO_FRAME_SKIP", "2")), 1)
 except ValueError:
@@ -296,7 +296,7 @@ def validate_video_file(file_path: Path) -> None:
 
     try:
         fps = capture.get(cv2.CAP_PROP_FPS)  # เฟรมต่อวินาที
-        frame_count = capture.get(cv2.CAP_PROP_FRAME_COUNT)  # จำนวนเฟรมทั้งหมด
+        frame_count = capture.get(cv2.CAP_PROP_FRAME_COUNT)  # จำนวนเฟรมทั้งหมด = เวลาวิดีโอ
         duration = frame_count / fps if fps > 0 else 0
 
         if duration > MAX_VIDEO_DURATION:
@@ -312,7 +312,7 @@ def validate_video_file(file_path: Path) -> None:
             )
 
     finally:  # ไม่ว่าจะเกิดอะไรขึ้นก็ต้องแน่ใจว่าไฟล์วิดีโอถูกปิดเสมอ
-        capture.release()
+        capture.release()  # ลบ / แก้ไข / overwrite ไฟล์ไม่ได้
 
 
 def send_email_message(subject: str, body: str, recipients: List[str]) -> None:
@@ -332,9 +332,9 @@ def send_email_message(subject: str, body: str, recipients: List[str]) -> None:
         server.send_message(msg)
 
 
-# กรณีที่ 1: ส่ง JSON (เช่น จาก frontend หรือ mobile app
-# กรณีที่ 2: ส่ง Form Data (เช่น จาก HTML form หรือ Postman แบบ form-data
-# หากคุณบังคับให้ส่งแค่ JSON อย่างเดียว → ผู้ใช้บางคน (เช่น ใช้ curl หรือ HTML form) จะใช้งานไม่ได้
+# กรณีที่ 1: ส่ง JSON (เช่น จาก frontend หรือ mobile app)
+# กรณีที่ 2: ส่ง Form Data (เช่น จาก HTML form หรือ Postman แบบ form-data)
+# หากบังคับให้ส่งแค่ JSON อย่างเดียว → ผู้ใช้บางคน (เช่น ใช้ curl หรือ HTML form) จะใช้งานไม่ได้
 async def extract_request_payload(
     request: Request,
 ) -> Dict[str, Any]:  # ดึงข้อมูลจาก request
@@ -386,12 +386,15 @@ async def save_upload_file(
 ) -> Dict[str, str]:
     original_name = original_name or upload.filename or "upload"
     ext = Path(original_name).suffix.lower()  # ดึงนามสกุลไฟล์
+    # ถ้าไม่มีนามสกุลในชื่อไฟล์ ให้ลองเดาจาก content type
     if not ext:
         ext = Path(upload.filename or "").suffix.lower()
+    # ถ้าไม่มีนามสกุลเลย ให้ใช้ .bin เป็นค่าเริ่มต้น
     if not ext:
         ext = ".bin"
     filename = f"{uuid.uuid4()}{ext}"
     file_path = UPLOAD_FOLDER / filename
+    # อ่านข้อมูลจาก UploadFile แล้วเขียนลง disk
     content = await upload.read()
     with open(file_path, "wb") as fh:
         fh.write(content)
@@ -525,8 +528,8 @@ def create_video_writer(path: Path, fps: float, width: int, height: int):
     raise RuntimeError(f"Unable to initialize video writer for {path.name}")
 
 
-# moov = สารบัญ, mdat = เนื้อเรื่อง
-# เวลาเครื่องบันทึกวิดีโอสร้างไฟล์ → มันวาง เนื้อเรื่องก่อน, แล้วค่อยใส่ สารบัญไว้ท้ายสุด → เหมือนหนังสือที่ สารบัญอยู่หน้าสุดท้าย!
+# moov = สารบัญ, mdat = เนื้อเรื่อง (Media Data)
+# เวลาเครื่องบันทึกวิดีโอสร้างไฟล์ → มันวาง เนื้อเรื่องก่อน, แล้วค่อยใส่ สารบัญไว้ท้ายสุด
 # ย้ายสารบัญไปหน้า → เล่นวิดีโอได้ทันทีโดยไม่ต้องโหลดทั้งไฟล์
 # แต่ต้อง แก้เลขในสารบัญ ให้ตรงกับตำแหน่งใหม่ → ไม่งั้นชี้ผิด!
 # ถ้าเราเลื่อนตำแหน่งข้อมูลในไฟล์ ต้องไปแก้ตัวเลขชี้ตำแหน่งข้างในด้วย
@@ -762,7 +765,9 @@ def run_models_on_frame(
     detections: List[Dict[str, Any]] = []
     # สร้างกลุ่ม thread ไว้รันงานหลายงานพร้อมกัน จำนวน thread ≈ จำนวน CPU cores Model A → Thread 1 b2 c3
     with concurrent.futures.ThreadPoolExecutor() as executor:
+        # สร้างงานสำหรับแต่ละโมเดลที่ต้องการรัน แล้วส่งไปให้ executor จัดการรันใน thread pool
         futures = [executor.submit(run_model, model_type) for model_type in model_types]
+        # รอให้ทุกงานเสร็จ แล้วดึงผลลัพธ์ออกมา
         for future in concurrent.futures.as_completed(futures):
             _, model_detections = future.result()
             detections.extend(model_detections)
@@ -930,7 +935,9 @@ def process_video_media(
                 break  # จบวิดีโอ
 
             # ตัดสินใจว่าจะรัน AI ทุกๆเฟรมไหน
-            should_process = (frame_index % VIDEO_FRAME_SKIP) == 2
+            # 5 % 2 = 1
+            # 6 % 2 = 0 รันทุกรอบที่หารด้วย VIDEO_FRAME_SKIP แล้วเหลือเศษ 0
+            should_process = (frame_index % VIDEO_FRAME_SKIP) == 0
 
             # เฟรมที่ ต้องประมวลผล AI
             if should_process:
@@ -952,7 +959,7 @@ def process_video_media(
                 if has_valid_detection:
                     frames_with_detections += 1
 
-                # สร้างเฟรมที่มี bounding box (ถ้าเปิดใช้งาน)
+                # สร้างเฟรมที่มี bounding box (ถ้าเปิดใช้งาน) ไม่ใช่ค่า None
                 if writer_processed is not None:
                     bbox_frame = draw_bounding_boxes_np(frame, detections)
                     last_bbox_frame = bbox_frame
@@ -968,7 +975,7 @@ def process_video_media(
                 # กรณี: ข้ามการประมวลผล AI → ใช้ผลลัพธ์จากเฟรมก่อนหน้า
                 detections = last_detections
 
-                # เขียนเฟรมลงวิดีโอเอาต์พุต โดยใช้ผล detection เดิม
+                # เขียนเฟรมลงวิดีโอเอาต์พุต โดยใช้ผล detection เดิม ไม่ใช่ค่า None
                 if writer_processed is not None:
                     if last_bbox_frame is not None:
                         # วาด bounding box บนเฟรมปัจจุบัน โดยใช้ผลการตรวจจับจากเฟรมก่อนหน้า
@@ -1000,7 +1007,7 @@ def process_video_media(
                     }
                 )
             detections_per_frame.append({"frame": frame_index, "detections": summary})
-            frame_index += 1
+            frame_index += 1  # เพิ่มเลขลำดับเฟรมขึ้นทีละ 1 ทุกครั้งที่วนลูป
 
     finally:
         # ปิด resource ทุกอย่างเมื่อเสร็จสิ้น ไม่ว่าจะสำเร็จหรือ error
@@ -1071,7 +1078,9 @@ async def block_browser_api_key_usage(request: Request, call_next):
         return await call_next(request)
     # เช็คว่ามาจาก Browser ไหม
     origin = request.headers.get("origin")
+    # User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0
     user_agent = request.headers.get("user-agent", "").lower()
+    # ตรวจสอบว่า user-agent มีลักษณะของ browser หรือไม่ ซึ่งเป็นส่วนประกอบทั่วไปใน user-agent ของ browser
     is_browser = any(x in user_agent for x in ["mozilla", "webkit", "gecko"])
 
     # ถ้ามาจาก browser
@@ -1103,6 +1112,7 @@ async def block_browser_api_key_usage(request: Request, call_next):
 
 
 # เช็กว่า request นี้ login มาแล้วจริงไหม
+# เอาไว้ให้endpoint ใช้ว่า endpoint นี้จะเข้าได้เฉพาะคน login แล้วเท่านั้น
 async def get_current_user(
     authorization: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
@@ -1117,7 +1127,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authorization header",
         )
-
+    # ถอดรหัส JWT token เพื่อดึงข้อมูลผู้ใช้
     token = parts[1]
     try:
         data = decode_token(token)  # ถอดรหัส JWT
@@ -1196,16 +1206,18 @@ def serve_homepage_assets(filename: str) -> FileResponse:
     return FileResponse(asset_path)
 
 
-# อัปโหลด
+# route นี้มีหน้าที่เป็น ตัว “เสิร์ฟไฟล์จริง” ให้ browser/app ดาวน์โหลดหรือเล่นวิดีโอ
 @app.get("/uploads/{filename:path}", name="uploaded_file")
 def get_uploaded_file(
     filename: str, range_header: Optional[str] = Header(None, alias="Range")
 ) -> StreamingResponse:
-
+    # รวม path ไฟล์ + แปลงเป็น path จริง
+    # เพื่อป้องกันการโจมตีแบบ path traversal เช่น ../secret.txt ที่พยายามเข้าถึงไฟล์นอกโฟลเดอร์ที่กำหนด
     file_path = (UPLOAD_FOLDER / filename).resolve()
-
+    # ตรวจสอบว่า path ที่ได้ยังอยู่ภายใน UPLOAD_FOLDER หรือไม่ ถ้าไม่ใช่แสดงว่ามีความพยายามเข้าถึงไฟล์นอกโฟลเดอร์ที่กำหนด → ปฏิเสธการเข้าถึง
     if not str(file_path).startswith(str(UPLOAD_FOLDER.resolve())):
         raise HTTPException(403, "Access denied")
+    # ตรวจสอบว่าไฟล์มีอยู่จริงไหม
     if not file_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
@@ -1214,6 +1226,7 @@ def get_uploaded_file(
     file_size = file_path.stat().st_size
     # เดาประเภทไฟล์ (MIME type) เช่น video/mp4, image/jpeg
     media_type, _ = mimetypes.guess_type(str(file_path))
+    # ถ้าไม่สามารถเดาได้ ให้ใช้ค่าเริ่มต้นเป็น application/octet-stream ซึ่งหมายถึงไฟล์ไบนารีทั่วไป
     media_type = media_type or "application/octet-stream"
 
     if range_header:
@@ -1324,7 +1337,7 @@ async def login(request: Request) -> JSONResponse:
             {"error": "This account uses Google login only. Please login with Google."},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
-
+    # ตรวจสอบรหัสผ่านที่กรอกกับรหัสผ่านที่เก็บไว้ในฐานข้อมูล hashed_password ที่ผู้ใช้กรอกเข้ามา (password) กับรหัสผ่านที่ hash เก็บไว้ในฐานข้อมูล (stored_password)
     if not check_password_hash(stored_password, password):
         # เพิ่มจำนวนครั้งที่ล้มเหลว
         new_attempts = user.get("failed_login_attempts", 0) + 1
@@ -1351,6 +1364,7 @@ async def login(request: Request) -> JSONResponse:
 
 
 # ฟังก์ชันนี้มีหน้าที่แปลงค่า raw_value ให้กลายเป็น List[str] เสมอ ["cigarate","violence"]
+# รับอะไรมาก็ได้ → แปลงให้อยู่ในรูปที่ระบบใช้ได้แน่นอน
 def parse_analysis_types_value(raw_value: Any) -> List[str]:
     if raw_value is None:
         return []
@@ -1628,7 +1642,7 @@ async def _analyze_image_internal(
                     )
                 continue
 
-            # กรณีไฟล์เดี่ยว
+            # กรณีไม่ใช่รุปภาพที่รองรับ → ข้ามและเก็บไว้ในรายงานผล
             if extension not in ALLOWED_IMAGE_EXTENSIONS:
                 skipped_entries.append(
                     {"name": original_name, "reason": "unsupported_extension"}
@@ -1682,6 +1696,7 @@ async def _analyze_image_internal(
         resolved_output_modes = parse_output_modes_value(
             api_key_data.get("output_modes")
         )
+        # ถ้า resolved_output_modes ว่าง → ให้ทำคำสั่งข้างใน
         if not resolved_output_modes:
             resolved_output_modes = parse_output_modes_value(output_modes)
         if not resolved_output_modes:
@@ -1772,7 +1787,7 @@ async def _analyze_image_internal(
                         "processed_blurred_image_url": blurred_url,
                     }
                     results.append(result_entry)
-                    processed_count += 1
+                    processed_count += 1  # นับจำนวนรูปที่ “วิเคราะห์สำเร็จจริง”
                     # เก็บ log การใช้งาน API Key สำหรับการวิเคราะห์ภาพนี้
                     log_api_key_usage_event(
                         api_key=api_key,
@@ -1796,7 +1811,7 @@ async def _analyze_image_internal(
                             ),
                         },
                     )
-
+                # ถ้าเกิดข้อผิดพลาดระหว่างการประมวลผล → แจ้ง error ในผลลัพธ์และลบไฟล์ทิ้ง
                 except Exception as e:
                     results.append(
                         {
@@ -1844,7 +1859,9 @@ async def _analyze_image_internal(
             "summary": summary_dict,
             "summary_labels": summary_labels,
         }
-        # ถ้าแค่ภาพเดียว → ใส่ข้อมูลรายละเอียดของภาพนั้นๆ ไว้ในระดับบนสุดของ response ด้วยเลย เพื่อความสะดวกในการใช้งาน
+        # ถ้าแค่ภาพเดียว → ใส่ข้อมูลรายละเอียดของภาพนั้นๆ ไว้ในระดับบนสุดของ response ด้วยเลย เพื่อความสะดวกในการใช้งานของ frontend
+        # response.results[0].detections ก่อนใช้
+        # response.detections หลังใช้
         if len(valid_results) == 1:
             single = valid_results[0]
             response_payload.update(
@@ -1857,7 +1874,7 @@ async def _analyze_image_internal(
                     ),
                 }
             )
-        # อัปเดตการใช้งาน API Key (ยกเว้นโหมด demo)
+        # อัปเดตการใช้งาน API Key (ยกเว้นโหมด demo) จำนวนครั้งในการใช้ key และเวลาที่ใช้ล่าสุด
         if not getattr(request.state, "is_demo_mode", False):
             api_keys_collection.update_one(
                 {"api_key": api_key_data["api_key"]},
@@ -2391,14 +2408,14 @@ async def generate_qr(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="รองรับเฉพาะ Premium Plan"
         )
-
+    # ตรวจสอบแพ็กเกจ
     package_raw = (payload.get("package") or "").strip().lower()
     package_config = PREMIUM_PLAN_PACKAGES.get(package_raw)
     if not package_config:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="แพ็กเกจไม่ถูกต้อง"
         )
-
+    # ระบุจำนวนเดือน (ถ้าไม่ระบุให้ถือว่า 1 เดือน)
     try:
         duration_months = int(
             payload.get("duration_months")
@@ -2633,6 +2650,9 @@ async def upload_receipt(
             "นาย ภูรินทร์ สุขมั่น",
         ]
         # ตรวจสอบชื่อผู้รับเงิน
+        # .strip() → ลบช่องว่างหน้า/หลัง
+        # .replace(" ", "") → ลบช่องว่างทั้งหมด
+        # .lower() → แปลงเป็นตัวเล็ก
         full_name_clean = full_name.strip().replace(" ", "").lower()
         allowed_names_clean = [name.replace(" ", "").lower() for name in allowed_names]
         if not any(name in full_name_clean for name in allowed_names_clean):
@@ -2652,6 +2672,7 @@ async def upload_receipt(
 
         if date_text:
             try:
+                # ตัวอย่างวันที่ใน mongo "created_at": ISODate("2025-02-16T07:30:00.000Z")
                 # แปลงปี พ.ศ. เป็น ค.ศ. ก่อนเปรียบเทียบ
                 parts = date_text.split("/")
                 day, month, year_str = parts[0], parts[1], parts[2]
@@ -2686,6 +2707,8 @@ async def upload_receipt(
                     created_datetime.date(), time_from_ocr.time()
                 )
                 # คำนวนความแตกต่าง จำนวนวินาที แปลงเป็นวินาที
+                # time_diff = abs((14:32:10 - 14:33:00)) = 50 วินาที
+                # abs = -120 → กลายเป็น 120
                 time_diff = abs((created_datetime - time_from_ocr_full).total_seconds())
                 if time_diff > 300:
                     raise HTTPException(
@@ -3008,7 +3031,7 @@ def serve_other_files(filename: str) -> FileResponse:
     return FileResponse(file_path)
 
 
-# ลบไฟล์ที่หมดอายุ
+# ลบไฟล์ที่อยู่บน disk แต่ไม่มี record ใน database แล้ว
 def cleanup_expired_files() -> None:
     try:
         current_files = set(os.listdir(UPLOAD_FOLDER))
@@ -3030,6 +3053,7 @@ def cleanup_expired_files() -> None:
 
 
 # เริ่มต้นการลบไฟล์ที่หมดอายุ
+# scheduler ระบบที่ตั้งเวลาให้ฟังก์ชันทำงานอัตโนมัติเป็นรอบ ๆ
 def start_cleanup_scheduler() -> None:
     import threading
     import time
