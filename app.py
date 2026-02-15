@@ -61,10 +61,15 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from zoneinfo import ZoneInfo
 from ocr_slip import AdvancedSlipOCR
 from ultralytics import YOLO
+import logging
+import subprocess
+from pathlib import Path
+from pymongo import ReturnDocument
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent  # path ของ project
 UPLOAD_FOLDER = BASE_DIR / "uploads"
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 
@@ -117,17 +122,24 @@ MAX_ZIP_SIZE = 50 * 1024 * 1024  # 50 MB
 MAX_VIDEO_DURATION = 60  # seconds
 MAX_VIDEO_FPS = 30
 MAX_ZIP_FILES = 100
-MAX_ZIP_EXTRACTED_SIZE = 200 * 1024 * 1024 # Limit total extracted size to avoid zip bombs
+MAX_ZIP_EXTRACTED_SIZE = (
+    200 * 1024 * 1024
+)  # Limit total extracted size to avoid zip bombs
+STREAM_CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 
 class ConcurrencyLimiter:
     def __init__(self, max_concurrency: int, max_waiting: int):
-        self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._semaphore = asyncio.Semaphore(
+            max_concurrency
+        )  # สร้าง Semaphore เพื่อจำกัดจำนวนงานที่รันพร้อมกัน
         self._max_waiting = max_waiting
         self._waiting = 0
-        self._lock = asyncio.Lock()
+        self._lock = (
+            asyncio.Lock()
+        )  # Lock ป้องกันไม่ให้หลาย request มาแก้ค่าตัวแปร _waiting พร้อมกันแล้วค่าพัง
 
-    async def acquire(self) -> None:
+    async def acquire(self) -> None:  # ขอสิทธิ์
         waiter_registered = False
         if self._max_waiting > 0:
             async with self._lock:
@@ -145,7 +157,7 @@ class ConcurrencyLimiter:
                 async with self._lock:
                     self._waiting = max(self._waiting - 1, 0)
 
-    def release(self) -> None:
+    def release(self) -> None:  # คืนสิทธิ์
         self._semaphore.release()
 
     async def __aenter__(self) -> "ConcurrencyLimiter":
@@ -169,9 +181,7 @@ MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
 MAIL_USE_TLS = os.getenv("MAIL_USE_TLS", "true").lower() == "true"
 MAIL_USERNAME = os.getenv("EMAIL_USER")
 MAIL_PASSWORD = os.getenv("EMAIL_PASS")
-MAIL_DEFAULT_SENDER = os.getenv(
-    "MAIL_DEFAULT_SENDER", MAIL_USERNAME or "no-reply@example.com"
-)
+MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER", MAIL_USERNAME or "@example.com")
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
@@ -187,13 +197,16 @@ otp_collection: Collection = db["otp_reset"]
 uploaded_files_collection: Collection = db["uploaded_files"]
 api_key_usage_collection: Collection = db["api_key_usage"]
 
-uploaded_files_collection.create_index([("created_at", 1)], expireAfterSeconds=3600)
+uploaded_files_collection.create_index(
+    [("created_at", 1)], expireAfterSeconds=3600
+)  # 7day = 604800 1day=86400
 api_key_usage_collection.create_index([("api_key", 1), ("created_at", -1)])
 api_key_usage_collection.create_index([("email", 1), ("created_at", -1)])
 orders_collection.create_index([("email", 1), ("paid", 1), ("created_time", -1)])
 api_keys_collection.create_index([("expires_at", 1)], expireAfterSeconds=0)
 
 TEST_PLAN_DURATION_DAYS = 7
+# ราคาต plan ต่อเดือน
 PREMIUM_PLAN_PACKAGES: Dict[str, Dict[str, Any]] = {
     "image": {"media_access": ["image"], "monthly_price": 79},
     "video": {"media_access": ["video"], "monthly_price": 119},
@@ -207,7 +220,7 @@ except ValueError:
     VIDEO_FRAME_SKIP = 2
 
 
-def sanitize_filename(filename: str) -> str:
+def sanitize_filename(filename: str) -> str:  # ลบ path ออกให้เหลือแต่ชื่อไฟล์
     return Path(filename or "upload").name
 
 
@@ -220,9 +233,9 @@ def allowed_video(filename: str) -> bool:
 
 
 def validate_image_size(file_obj: BytesIO) -> None:
-    file_obj.seek(0, os.SEEK_END)
-    size = file_obj.tell()
-    file_obj.seek(0)
+    file_obj.seek(0, os.SEEK_END)  # เลื่อนไปที่ท้ายไฟล์
+    size = file_obj.tell()  # ขนาดไฟล์
+    file_obj.seek(0)  # เลื่อนไปที่ต้นไฟล์
     if size > MAX_IMAGE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -239,65 +252,65 @@ def validate_zip_file(file_obj: BytesIO) -> None:
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"ZIP file size exceeds limit of {MAX_ZIP_SIZE/1024/1024}MB",
         )
-    
+
     try:
-        with zipfile.ZipFile(file_obj) as archive:
+        with zipfile.ZipFile(file_obj) as archive:  # เปิดไฟล์ zip
             if len(archive.infolist()) > MAX_ZIP_FILES:
-                 raise HTTPException(
+                raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"ZIP file contains too many files (limit: {MAX_ZIP_FILES})",
                 )
-            
+
             total_extracted_size = sum(zinfo.file_size for zinfo in archive.infolist())
             if total_extracted_size > MAX_ZIP_EXTRACTED_SIZE:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"ZIP file extracted content exceeds limit",
                 )
-                
+
     except zipfile.BadZipFile:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid ZIP file",
         )
-    file_obj.seek(0)
+    file_obj.seek(0)  # รีเซ็ต pointer กลับต้นไฟล์
 
 
 def validate_video_file(file_path: Path) -> None:
-    # Check file size
-    size = file_path.stat().st_size
+    # ตรวจสอบขนาดไฟล์ก่อนเปิดด้วย OpenCV เพื่อประหยัดทรัพยากรในกรณีที่ไฟล์ใหญ่เกินไป
+    size = file_path.stat().st_size  # ตรวจสอบขนาดไฟล์
     if size > MAX_VIDEO_SIZE:
-         raise HTTPException(
+        raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"Video file size exceeds limit of {MAX_VIDEO_SIZE/1024/1024}MB",
         )
 
-    # Check duration and FPS
-    capture = cv2.VideoCapture(str(file_path))
+    # เปิดไฟล์วิดีโอด้วย OpenCV เพื่อดึงข้อมูลเกี่ยวกับวิดีโอ เช่น ความยาวและเฟรมต่อวินาที
+    capture = cv2.VideoCapture(str(file_path))  # เปิดไฟล์วิดีโอ
     if not capture.isOpened():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Could not open video file for validation",
         )
-    
+
     try:
-        fps = capture.get(cv2.CAP_PROP_FPS)
-        frame_count = capture.get(cv2.CAP_PROP_FRAME_COUNT)
+        fps = capture.get(cv2.CAP_PROP_FPS)  # เฟรมต่อวินาที
+        frame_count = capture.get(cv2.CAP_PROP_FRAME_COUNT)  # จำนวนเฟรมทั้งหมด
         duration = frame_count / fps if fps > 0 else 0
-        
+
         if duration > MAX_VIDEO_DURATION:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Video duration exceeds limit of {MAX_VIDEO_DURATION} seconds",
             )
-            
+
         if fps > MAX_VIDEO_FPS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Video FPS exceeds limit of {MAX_VIDEO_FPS}",
             )
-            
-    finally:
+
+    finally:  # ไม่ว่าจะเกิดอะไรขึ้นก็ต้องแน่ใจว่าไฟล์วิดีโอถูกปิดเสมอ
         capture.release()
 
 
@@ -305,28 +318,27 @@ def send_email_message(subject: str, body: str, recipients: List[str]) -> None:
     if not MAIL_USERNAME or not MAIL_PASSWORD:
         raise RuntimeError("Email credentials are not configured.")
 
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = MAIL_DEFAULT_SENDER
-    msg["To"] = ", ".join(recipients)
+    msg = EmailMessage()  # สร้างอีเมลใหม่
+    msg["Subject"] = subject  # หัวข้ออีเมล
+    msg["From"] = MAIL_DEFAULT_SENDER  # ผู้ส่งอีเมล
+    msg["To"] = ", ".join(recipients)  # ผู้รับอีเมล
     msg.set_content(body)
 
-    with smtplib.SMTP(MAIL_SERVER, MAIL_PORT) as server:
+    with smtplib.SMTP(MAIL_SERVER, MAIL_PORT) as server:  # เชื่อมต่อกับ mail server
         if MAIL_USE_TLS:
             server.starttls()
         server.login(MAIL_USERNAME, MAIL_PASSWORD)
         server.send_message(msg)
 
 
-async def extract_request_payload(request: Request) -> Dict[str, Any]:
-    """
-    Safely extract JSON or form payloads regardless of Content-Type header.
-    """
+async def extract_request_payload(
+    request: Request,
+) -> Dict[str, Any]:  # ดึงข้อมูลจาก request
     try:
-        return await request.json()
+        return await request.json()  # แปลง json เป็น dict
     except (JSONDecodeError, ValueError):
         form = await request.form()
-        return {key: form.get(key) for key in form.keys()}
+        return {key: form.get(key) for key in form.keys()}  # แปลง form data เป็น dict
 
 
 def generate_token(email: str) -> str:
@@ -340,13 +352,16 @@ def decode_token(token: str) -> Dict[str, Any]:
     return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
 
 
+# bytes → เขียนลง disk
 def save_bytes_to_uploads(
     data: bytes, extension: str, original_name: str
 ) -> Dict[str, str]:
-    suffix = extension if extension.startswith(".") else f".{extension}"
+    suffix = (
+        extension if extension.startswith(".") else f".{extension}"
+    )  # ถ้าไม่มีจุดเติม . ให้
     filename = f"{uuid.uuid4()}{suffix.lower()}"
     file_path = UPLOAD_FOLDER / filename
-    with open(file_path, "wb") as fh:
+    with open(file_path, "wb") as fh:  # เขียนไฟล์ลง disk
         fh.write(data)
     uploaded_files_collection.insert_one(
         {"filename": filename, "created_at": datetime.utcnow()}
@@ -358,11 +373,13 @@ def save_bytes_to_uploads(
     }
 
 
+# เหตุผลที่ต้องเเยก input (Type ต่างกัน)
+# UploadFile → (อ่านเป็น bytes) → เขียนลง disk ใช้กับ /upload
 async def save_upload_file(
     upload: UploadFile, original_name: Optional[str] = None
 ) -> Dict[str, str]:
     original_name = original_name or upload.filename or "upload"
-    ext = Path(original_name).suffix.lower()
+    ext = Path(original_name).suffix.lower()  # ดึงนามสกุลไฟล์
     if not ext:
         ext = Path(upload.filename or "").suffix.lower()
     if not ext:
@@ -386,87 +403,103 @@ async def save_upload_file(
 def remove_stored_file(file_record: Dict[str, Any]) -> None:
     stored_filename = file_record.get("stored_filename")
     file_path = file_record.get("file_path")
+
     if stored_filename:
-        uploaded_files_collection.delete_one({"filename": stored_filename})
+        uploaded_files_collection.delete_one(
+            {"filename": stored_filename}
+        )  # ลบ record ใน db
+
     if file_path:
         try:
-            Path(file_path).unlink(missing_ok=True)
-        except OSError:
-            pass
+            Path(file_path).unlink(missing_ok=True)  # ลบไฟล์ออกจาก disk
+        except OSError as e:
+            logger.warning(f"File deletion failed: {file_path} ({e})")
 
 
-STREAM_CHUNK_SIZE = 1024 * 1024
-
-
+# แยก range header ออกเป็น start, end เช่น เวลาคุณดูวิดีโอในเว็บ คุณลากไปนาทีที่ 10 ถ้าไม่มีฟังก์ชันนี้ วิดีโอจะลาก timeline ไม่ได้
 def parse_range_header(range_header: str, file_size: int) -> Optional[Tuple[int, int]]:
-    if not range_header or not range_header.startswith("bytes="):
+    if not range_header or not range_header.startswith(
+        "bytes="
+    ):  # ถ้าไม่มี header หรือ ไม่ขึ้นต้นด้วย bytes=
         return None
-    ranges = range_header.replace("bytes=", "", 1).split(",")[0].strip()
-    if "-" not in ranges:
+    ranges = (
+        range_header.replace("bytes=", "", 1).split(",")[0].strip()
+    )  # รองรับหลาย range แต่เอาแค่ตัวแรก
+    if "-" not in ranges:  # ถ้าไม่มี - แสดงว่า header ไม่ถูกต้อง
         return None
-    start_str, end_str = ranges.split("-", 1)
+    start_str, end_str = ranges.split("-", 1)  # แยก start กับ end
     try:
-        if start_str:
+        if start_str:  # ถ้ามี start
             start = int(start_str)
         else:
-            length = int(end_str)
+            length = int(end_str)  # ถ้าไม่มี start ให้เอา length แทน
             if length <= 0:
                 return None
             start = max(file_size - length, 0)
-        if end_str:
-            end = int(end_str)
+        if end_str:  # ถ้ามี end
+            end = int(end_str)  #
         else:
-            end = file_size - 1
+            end = file_size - 1  # ถ้าไม่มี end ให้ไปสุดไฟล์
     except ValueError:
         return None
 
-    if start < 0 or end < start or end >= file_size:
+    if (
+        start < 0 or end < start or end >= file_size
+    ):  # ตรวจสอบความถูกต้องของค่า start และ end
         return None
     return start, end
 
 
+# อ่านไฟล์ทีละก้อน (chunk) แบบสตรีมทำให้ประหยัดเเรม
 def iter_file_chunks(path: Path, start: int, end: int) -> Iterable[bytes]:
     with path.open("rb") as file_obj:
-        file_obj.seek(start)
-        remaining = end - start + 1
+        file_obj.seek(start)  # ขยับ pointer ไปจุดเริ่ม
+        remaining = end - start + 1  # คำนวณว่าจะอ่านทั้งหมดกี่ byte
         while remaining > 0:
-            chunk = file_obj.read(min(STREAM_CHUNK_SIZE, remaining))
+            chunk = file_obj.read(min(STREAM_CHUNK_SIZE, remaining))  # วนลูปอ่านทีละก้อน
             if not chunk:
                 break
-            yield chunk
+            yield chunk  # ส่ง chunk ออกไป
             remaining -= len(chunk)
 
 
+# รับภาพทีละ frame (numpy array) แล้วเอามาต่อกันเป็นวิดีโอ
 class ImageIOVideoWriter:
-    """Video writer that uses imageio/ffmpeg to produce H.264 compatible files."""
 
     def __init__(self, path: Path, fps: float, width: int, height: int) -> None:
         if imageio is None:
             raise RuntimeError("imageio is not available")
-        if fps <= 0:
+        if fps <= 0:  # ตรวจสอบ fps
             fps = 25.0
+        # สร้าง writer object
         self._writer = imageio.get_writer(
             str(path),
-            fps=fps,
-            codec="libx264",
-            pixelformat="yuv420p",
-            macro_block_size=None,
-            output_params=["-movflags", "+faststart"],
+            fps=fps,  # เฟรมต่อวินาที
+            codec="libx264",  # codec ที่ใช้บีบอัดวิดีโอ
+            pixelformat="yuv420p",  # รูปแบบพิกเซลที่ใช้
+            macro_block_size=None,  # ปิด macro block size เพื่อรองรับขนาดวิดีโอที่ไม่ใช่ multiple ของ 16
+            output_params=[
+                "-movflags",
+                "+faststart",
+            ],  # ทำให้วิดีโอเล่นได้ทันทีไม่ต้องรอโหลดทั้งหมด
         )
         self._closed = False
 
+    # รับ frame (numpy array) แล้วเขียนลงวิดีโอ
     def write(self, frame: np.ndarray) -> None:
         if self._closed:
             return
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # แปลง BGR เป็น RGB
         self._writer.append_data(rgb_frame)
 
+    # ปิด writer
     def release(self) -> None:
         if not self._closed:
             self._writer.close()
             self._closed = True
 
 
+# สร้าง video writer โดยพยายามใช้ imageio ก่อน ถ้าไม่สำเร็จจะใช้ cv2 แทน ตัดสินใจว่าจะใช้ writer ตัวไหนดี
 def create_video_writer(path: Path, fps: float, width: int, height: int):
     if imageio is not None:
         try:
@@ -481,6 +514,7 @@ def create_video_writer(path: Path, fps: float, width: int, height: int):
     raise RuntimeError(f"Unable to initialize video writer for {path.name}")
 
 
+# ถ้าเราเลื่อนตำแหน่งข้อมูลในไฟล์ ต้องไปแก้ตัวเลขชี้ตำแหน่งข้างในด้วย
 def patch_moov_offsets_inplace(buffer: memoryview, shift: int) -> None:
     container_atoms = {
         b"moov",
@@ -537,6 +571,10 @@ def patch_moov_offsets_inplace(buffer: memoryview, shift: int) -> None:
         offset += atom_size
 
 
+# ย้าย moov atom ไปไว้ที่ต้นไฟล์ MP4 เพื่อให้สามารถเล่นวิดีโอแบบ streaming ได้ทันที
+# เหตุผล: โดยปกติ MP4 สร้างโดยเครื่องบันทึก → moov อยู่ท้าย (mdat มาก่อน)
+# ทำให้ player ต้องโหลดทั้งไฟล์ก่อนถึงจะรู้ metadata → ไม่เหมาะกับ streaming
+# ย้าย moov ไปหน้า → player อ่าน metadata ทันที → เล่นได้เลย!
 def optimize_mp4_faststart(path: Path) -> None:
     try:
         data = path.read_bytes()
@@ -613,15 +651,17 @@ def optimize_mp4_faststart(path: Path) -> None:
         temp_path.unlink(missing_ok=True)
 
 
+# ตรวจสอบว่าไฟล์เป็นรูปภาพหรือไม่
 def is_image(file_path: str) -> bool:
     try:
         with Image.open(file_path) as img:
-            img.verify()
+            img.verify()  # ตรวจสอบความถูกต้องของไฟล์ภาพ
         return True
     except (IOError, SyntaxError):
         return False
 
 
+# บันทึกประวัติเหตุการณ์การใช้งาน API key
 def log_api_key_usage_event(
     api_key: str,
     email: str,
@@ -659,7 +699,7 @@ models = {
     "porn": load_model("โป๊เปลือยดีจัดเลียๆๆๆๆ.pt"),
     "weapon": load_model("อาวุธดีจัดปั้งงงงงๆ.pt"),
     "cigarette": load_model("บุหรี่ของดีจัดสูดๆๆๆ.pt"),
-    "violence": load_model("โป๊เปลือยดีจัดเลียๆๆๆๆ.pt"),
+    "violence": load_model("violence-pose.pt"),
 }
 
 
@@ -675,14 +715,17 @@ def run_models_on_frame(
             imgsz=640,
             device=device,
             conf=threshold,
-            verbose=False,
-            save=False,
-            stream=False,
+            verbose=False,  # ไม่แสดง log รายละเอียดตอนรันโมเดล
+            save=False,  # ไม่บันทึกผลลัพธ์เป็นไฟล์
+            stream=False,  # ไม่ใช้ stream
         )
+        # ประมวลผลผลลัพธ์จากโมเดล
         detections_local: List[Dict[str, Any]] = []
         for result in results:
+            # ถ้าไม่มี boxes หรือ boxes เป็น None ให้ข้ามไป
             if not hasattr(result, "boxes") or result.boxes is None:
                 continue
+            # วนลูปผ่านแต่ละ box ที่ตรวจพบ
             for box in result.boxes:
                 confidence = float(box.conf)
                 if confidence < threshold:
@@ -700,7 +743,9 @@ def run_models_on_frame(
                 )
         return model_type, detections_local
 
+    # รันโมเดลพร้อมกันหลายตัว
     detections: List[Dict[str, Any]] = []
+    # สร้างกลุ่ม thread ไว้รันงานหลายงานพร้อมกัน จำนวน thread ≈ จำนวน CPU cores Model A → Thread 1 b2 c3
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [executor.submit(run_model, model_type) for model_type in model_types]
         for future in concurrent.futures.as_completed(futures):
@@ -712,8 +757,8 @@ def run_models_on_frame(
 def draw_bounding_boxes_np(
     image_bgr: np.ndarray, detections: List[Dict[str, Any]]
 ) -> np.ndarray:
-    output = image_bgr.copy()
-    for detection in detections:
+    output = image_bgr.copy()  # สร้างสำเนาของรูปภาพ
+    for detection in detections:  # วนลูปผ่านแต่ละ box ที่ตรวจพบ
         x1, y1, x2, y2 = map(int, detection["bbox"])
         label = detection.get("label", "")
         confidence = detection.get("confidence", 0.0)
@@ -726,20 +771,20 @@ def draw_bounding_boxes_np(
         text = f"{label} ({confidence:.2f})"
         text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
 
-        # Calculate text position
+        # คำนวณตำแหน่งข้อความ
         text_w, text_h = text_size
         if y1 - text_h - 10 < 0:
-            # Draw text inside the box if it doesn't fit above
+            # วาดข้อความภายในกล่องถ้าไม่พอดีด้านบน
             text_origin = (x1, y1 + text_h + 5)
             rect_pt1 = (x1, y1)
             rect_pt2 = (x1 + text_w, y1 + text_h + 10)
         else:
-            # Draw text above the box
+            # วาดข้อความด้านบนกล่อง
             text_origin = (x1, y1 - 5)
             rect_pt1 = (x1, y1 - text_h - 10)
             rect_pt2 = (x1 + text_w, y1)
 
-        # Draw text background
+        # วาดพื้นหลังข้อความ
         cv2.rectangle(
             output,
             rect_pt1,
@@ -747,7 +792,7 @@ def draw_bounding_boxes_np(
             (0, 255, 0),
             -1,
         )
-        # Draw text
+        # วาดข้อความ
         cv2.putText(
             output,
             text,
@@ -760,46 +805,54 @@ def draw_bounding_boxes_np(
     return output
 
 
+# ฟังก์ชันเบลอภาพ
 def blur_detected_areas_np(
     image_bgr: np.ndarray,
     detections: List[Dict[str, Any]],
-    blur_ksize: Tuple[int, int] = (51, 51),
+    blur_ksize: Tuple[int, int] = (51, 51),  # ความเข้มของการเบลอ
 ) -> np.ndarray:
-    blurred_image = image_bgr.copy()
-    for detection in detections:
+    blurred_image = image_bgr.copy()  # สร้างสำเนาของรูปภาพ
+    for detection in detections:  # วนลูปผ่านแต่ละ box ที่ตรวจพบ
         x1, y1, x2, y2 = map(int, detection["bbox"])
         h, w = blurred_image.shape[:2]
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w - 1, x2), min(h - 1, y2)
         roi = blurred_image[y1:y2, x1:x2]
-        if roi.size == 0:
+        if roi.size == 0:  # ถ้าไม่มี box ให้ข้ามไป
             continue
-        roi_blurred = cv2.GaussianBlur(roi, blur_ksize, 0)
-        blurred_image[y1:y2, x1:x2] = roi_blurred
+        roi_blurred = cv2.GaussianBlur(roi, blur_ksize, 0)  # เบลอภาพ
+        blurred_image[y1:y2, x1:x2] = roi_blurred  # แทนที่ภาพเดิมด้วยภาพที่เบลอ
     return blurred_image
 
 
+# PIL ใช้ RGB OpenCV ใช้ BGR
 def process_selected_models(
     image: Image.Image, model_types: List[str], thresholds: Dict[str, float]
 ) -> Tuple[Image.Image, Image.Image, List[Dict[str, Any]]]:
-    image_bgr = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-    detections = run_models_on_frame(image_bgr, model_types, thresholds)
-    output_bbox = draw_bounding_boxes_np(image_bgr, detections)
-    output_blur = blur_detected_areas_np(image_bgr, detections)
-    output_bbox_image = Image.fromarray(cv2.cvtColor(output_bbox, cv2.COLOR_BGR2RGB))
-    output_blur_image = Image.fromarray(cv2.cvtColor(output_blur, cv2.COLOR_BGR2RGB))
+    image_bgr = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)  # แปลงภาพเป็น BGR
+    detections = run_models_on_frame(image_bgr, model_types, thresholds)  # รันโมเดล
+    output_bbox = draw_bounding_boxes_np(image_bgr, detections)  # วาด bounding box
+    output_blur = blur_detected_areas_np(image_bgr, detections)  # วาดเบลอภาพ
+    output_bbox_image = Image.fromarray(
+        cv2.cvtColor(output_bbox, cv2.COLOR_BGR2RGB)
+    )  # แปลงภาพเป็น RGB
+    output_blur_image = Image.fromarray(
+        cv2.cvtColor(output_blur, cv2.COLOR_BGR2RGB)
+    )  # แปลงภาพเป็น RGB
     return output_bbox_image, output_blur_image, detections
 
 
+# ฟังก์ชันประมวลผลภาพ
 def process_image_file_for_models(
     file_path: str, model_types: List[str], thresholds: Dict[str, float]
 ) -> Tuple[Image.Image, Image.Image, List[Dict[str, Any]]]:
-    path = Path(file_path)
-    with Image.open(path) as raw_image:
-        image_rgb = raw_image.convert("RGB")
-    return process_selected_models(image_rgb, model_types, thresholds)
+    path = Path(file_path)  # สร้าง path
+    with Image.open(path) as raw_image:  # เปิดไฟล์ภาพ
+        image_rgb = raw_image.convert("RGB")  # แปลงภาพเป็น RGB
+    return process_selected_models(image_rgb, model_types, thresholds)  # ประมวลผลภาพ
 
 
+# ฟังก์ชันประมวลผลวิดีโอ จัดดาต้าเป็นเฟรม แล้วส่งไปให้โมเดลประมวลผลทีละเฟรม แล้วเอาผลลัพธ์มาวาด bounding box หรือเบลอภาพตามที่เลือก สุดท้ายเอาเฟรมที่ประมวลผลแล้วมาต่อกันเป็นวิดีโอใหม่
 def process_video_media(
     video_path: Path,
     model_types: List[str],
@@ -807,7 +860,7 @@ def process_video_media(
     include_bbox: bool,
     include_blur: bool,
 ) -> Tuple[Optional[Path], Optional[Path], List[Dict[str, Any]], Dict[str, int]]:
-    capture = cv2.VideoCapture(str(video_path))
+    capture = cv2.VideoCapture(str(video_path))  # เปิดไฟล์วิดีโอ
     if not capture.isOpened():
         raise RuntimeError("Unable to open video file")
 
@@ -822,16 +875,18 @@ def process_video_media(
     writer_processed: Optional[Any] = None
     writer_blurred: Optional[Any] = None
     try:
-        if include_bbox:
-            processed_filename = f"processed_{uuid.uuid4()}.mp4"
-            processed_path = UPLOAD_FOLDER / processed_filename
-            writer_processed = create_video_writer(processed_path, fps, width, height)
-        if include_blur:
+        if include_bbox:  # ถ้า include_bbox เป็น True
+            processed_filename = f"processed_{uuid.uuid4()}.mp4"  # สร้างชื่อไฟล์
+            processed_path = UPLOAD_FOLDER / processed_filename  # สร้าง path
+            writer_processed = create_video_writer(
+                processed_path, fps, width, height
+            )  # สร้าง video writer
+        if include_blur:  # ถ้า include_blur เป็น True
             blurred_filename = f"blurred_{uuid.uuid4()}.mp4"
             blurred_path = UPLOAD_FOLDER / blurred_filename
             writer_blurred = create_video_writer(blurred_path, fps, width, height)
     except Exception as writer_exc:
-        capture.release()
+        capture.release()  # ปิด video ทิ้ง
         if writer_processed:
             writer_processed.release()
         if writer_blurred:
@@ -840,58 +895,72 @@ def process_video_media(
             f"Failed to initialize video writers: {writer_exc}"
         ) from writer_exc
 
-    detections_per_frame: List[Dict[str, Any]] = []
-    aggregated: Dict[str, int] = defaultdict(int)
+    detections_per_frame: List[Dict[str, Any]] = []  # ข้อมูล detection รายเฟรม
+    aggregated: Dict[str, int] = defaultdict(int)  # สรุปว่าพบ label อะไรบ้างกี่ครั้ง
 
     frame_index = 0
     last_bbox_frame = None
     last_blurred_frame = None
     last_detections = []
 
-    processed_frame_count = 0  # Count only processed frames
-    frames_with_detections = 0  # Count frames with valid detections
+    processed_frame_count = 0  # นับเฉพาะเฟรมที่ process
+    frames_with_detections = 0  # นับเฉพาะเฟรมที่มีการตรวจจับ
 
+    # วนลูปอ่านและประมวลผลทีละเฟรม
     try:
         while True:
+            # ret ใช้เช็กว่าอ่านเฟรมจากกล้องหรือวิดีโอได้สำเร็จหรือไม่
             ret, frame = capture.read()
             if not ret:
-                break
+                break  # จบวิดีโอ
 
-            should_process = (frame_index % VIDEO_FRAME_SKIP) == 0
+            # ตัดสินใจว่าจะรัน AI ทุกๆเฟรมไหน
+            should_process = (frame_index % VIDEO_FRAME_SKIP) == 2
 
+            # เฟรมที่ ต้องประมวลผล AI
             if should_process:
+                # กรณี: ประมวลผลเฟรมนี้ด้วย AI
                 processed_frame_count += 1
-                detections = run_models_on_frame(frame, model_types, thresholds)
-                last_detections = detections  # Cache for skipped frames
 
-                # Check if this frame has valid detections
+                # ส่งเฟรมไปให้โมเดลที่ระบุ แล้วได้ผลลัพธ์การตรวจจับ
+                detections = run_models_on_frame(frame, model_types, thresholds)
+                last_detections = detections  # เก็บไว้ใช้ในเฟรมถัดไปที่ skip
+
+                # ตรวจสอบว่าเฟรมนี้มีการตรวจจับที่ผ่านเกณฑ์หรือไม่
                 has_valid_detection = any(
                     d.get("confidence", 0)
                     >= float(thresholds.get(d.get("model_type"), 0.5))
                     for d in detections
                 )
+
+                # เช็กว่ามี detection จริงไหม confidence ต้องเกิน thresholdที่กำหนดไว้ใน thresholds
                 if has_valid_detection:
                     frames_with_detections += 1
 
+                # สร้างเฟรมที่มี bounding box (ถ้าเปิดใช้งาน)
                 if writer_processed is not None:
                     bbox_frame = draw_bounding_boxes_np(frame, detections)
                     last_bbox_frame = bbox_frame
                     writer_processed.write(bbox_frame)
 
+                # สร้างเฟรมที่เบลอพื้นที่ที่ตรวจพบ (ถ้าเปิดใช้งาน)
                 if writer_blurred is not None:
                     blurred_frame = blur_detected_areas_np(frame, detections)
                     last_blurred_frame = blurred_frame
                     writer_blurred.write(blurred_frame)
+
             else:
-                # Skip AI processing, reuse previous frame's detection results
+                # กรณี: ข้ามการประมวลผล AI → ใช้ผลลัพธ์จากเฟรมก่อนหน้า
                 detections = last_detections
 
-                # Write the raw frame with previous detections overlaid
+                # เขียนเฟรมลงวิดีโอเอาต์พุต โดยใช้ผล detection เดิม
                 if writer_processed is not None:
                     if last_bbox_frame is not None:
+                        # วาด bounding box บนเฟรมปัจจุบัน โดยใช้ผลการตรวจจับจากเฟรมก่อนหน้า
                         bbox_frame = draw_bounding_boxes_np(frame, detections)
                         writer_processed.write(bbox_frame)
                     else:
+                        # ยังไม่มีการ detect มาก่อน → เขียนเฟรมดิบ
                         writer_processed.write(frame)
 
                 if writer_blurred is not None:
@@ -901,12 +970,12 @@ def process_video_media(
                     else:
                         writer_blurred.write(frame)
 
-            # Aggregate detections for summary
+            # รวบรวมข้อมูลสรุปสำหรับเฟรมนี้
             summary = []
             for detection in detections:
                 label = detection.get("label")
                 if label:
-                    aggregated[label] += 1
+                    aggregated[label] += 1  # นับรวม label นี้อีก 1 ครั้ง
                 summary.append(
                     {
                         "label": detection.get("label"),
@@ -917,19 +986,24 @@ def process_video_media(
                 )
             detections_per_frame.append({"frame": frame_index, "detections": summary})
             frame_index += 1
+
     finally:
+        # ปิด resource ทุกอย่างเมื่อเสร็จสิ้น ไม่ว่าจะสำเร็จหรือ error
         capture.release()
         if writer_processed:
             writer_processed.release()
         if writer_blurred:
             writer_blurred.release()
 
+    # คำนวณอัตราส่วนการตรวจจับ
+    # ใช้เพื่อประเมินว่าวิดีโอมีเนื้อหาที่น่าสงสัยบ่อยแค่ไหน
     detection_ratio = (
         frames_with_detections / processed_frame_count
         if processed_frame_count > 0
         else 0.0
     )
 
+    # optimize ไฟล์ MP4 ให้เล่นได้ทันทีใน browser (moov atom อยู่ต้นไฟล์)
     try:
         if processed_path is not None:
             optimize_mp4_faststart(processed_path)
@@ -940,6 +1014,7 @@ def process_video_media(
             f"[faststart] optimization error for {processed_filename} / {blurred_filename}: {exc}"
         )
 
+    # บันทึกชื่อไฟล์ลงฐานข้อมูลเพื่อติดตามและลบอัตโนมัติภายหลัง
     if processed_filename:
         uploaded_files_collection.insert_one(
             {"filename": processed_filename, "created_at": datetime.utcnow()}
@@ -949,6 +1024,7 @@ def process_video_media(
             {"filename": blurred_filename, "created_at": datetime.utcnow()}
         )
 
+    # คืนค่าผลลัพธ์ทั้งหมด
     return (
         processed_path,
         blurred_path,
@@ -975,20 +1051,22 @@ if HOMEPAGE_DIR.exists():
 @app.middleware("http")
 async def block_browser_api_key_usage(request: Request, call_next):
     path = request.url.path
+    # ทำงานกับ path ไหนบ้าง
     if path not in ["/analyze-image", "/analyze-video"]:
         return await call_next(request)
-
+    # เช็คว่ามาจาก Browser ไหม
     origin = request.headers.get("origin")
     user_agent = request.headers.get("user-agent", "").lower()
     is_browser = any(x in user_agent for x in ["mozilla", "webkit", "gecko"])
 
-    # If the request comes from a browser
+    # ถ้ามาจาก browser
     if is_browser:
+        # เป็น Demo Origin ที่อนุญาต
         if origin in ALLOWED_DEMO_ORIGINS:
             request.state.is_demo_mode = True
             return await call_next(request)
         else:
-            # Block browser access even with x-api-key
+            # ไม่ใช่ Demo Origin ที่อนุญาต
             return JSONResponse(
                 {
                     "error": "Browser access not allowed. Use authorized demo or server-to-server with API key."
@@ -996,7 +1074,7 @@ async def block_browser_api_key_usage(request: Request, call_next):
                 status_code=403,
             )
 
-    # If not from a browser, require x-api-key
+    # ถ้าไม่ใช่ browser ต้องมี x-api-key
     x_api_key = request.headers.get("x-api-key")
     if not x_api_key:
         return JSONResponse({"error": "Missing x-api-key"}, status_code=401)
@@ -1009,6 +1087,7 @@ async def block_browser_api_key_usage(request: Request, call_next):
     return await call_next(request)
 
 
+# เช็กว่า request นี้ login มาแล้วจริงไหม
 async def get_current_user(
     authorization: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
@@ -1016,6 +1095,7 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token is missing"
         )
+    # เช็คว่ามี Authorization header ไหม
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
         raise HTTPException(
@@ -1025,7 +1105,7 @@ async def get_current_user(
 
     token = parts[1]
     try:
-        data = decode_token(token)
+        data = decode_token(token)  # ถอดรหัส JWT
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
@@ -1034,7 +1114,7 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         )
-
+    # หา user ที่มี email ตรงกับ email ใน token
     current_user = users_collection.find_one({"email": data["email"]})
     if not current_user:
         raise HTTPException(
@@ -1043,20 +1123,22 @@ async def get_current_user(
     return current_user
 
 
+# ตรวจว่า request ที่เข้ามามี API Key ถูกต้องและยังไม่หมดอายุ ก่อนอนุญาตให้ใช้ API
 async def require_api_key(
     x_api_key: Optional[str] = Header(None, alias="x-api-key")
 ) -> Dict[str, Any]:
+    # เช็คว่ามี x-api-key ไหม
     if not x_api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing API Key"
         )
-
+    # ตรวจสอบว่า key มีอยู่ใน DB ไหม
     api_key_data = api_keys_collection.find_one({"api_key": x_api_key})
     if not api_key_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API Key"
         )
-
+    # เช็คว่า api_key หมดอายุไหม
     expires_at = api_key_data.get("expires_at")
     if expires_at:
         if expires_at.tzinfo is None:
@@ -1069,6 +1151,7 @@ async def require_api_key(
     return api_key_data
 
 
+# อนุญาติ Demo Origin
 ALLOWED_DEMO_ORIGINS = {
     origin.strip().rstrip("/")
     for origin in os.getenv("API_BASE_URL", "").split(",")
@@ -1076,6 +1159,7 @@ ALLOWED_DEMO_ORIGINS = {
 }
 
 
+# หน้าเเรก
 @app.get("/")
 def home() -> FileResponse:
     index_path = HOMEPAGE_DIR / "index.html"
@@ -1086,6 +1170,7 @@ def home() -> FileResponse:
     return FileResponse(index_path)
 
 
+# หน้าเว็บ
 @app.get("/homepage/{filename:path}")
 def serve_homepage_assets(filename: str) -> FileResponse:
     asset_path = HOMEPAGE_DIR / filename
@@ -1096,21 +1181,28 @@ def serve_homepage_assets(filename: str) -> FileResponse:
     return FileResponse(asset_path)
 
 
+# อัปโหลด
 @app.get("/uploads/{filename:path}", name="uploaded_file")
 def get_uploaded_file(
     filename: str, range_header: Optional[str] = Header(None, alias="Range")
 ) -> StreamingResponse:
-    file_path = UPLOAD_FOLDER / filename
+
+    file_path = (UPLOAD_FOLDER / filename).resolve()
+
+    if not str(file_path).startswith(str(UPLOAD_FOLDER.resolve())):
+        raise HTTPException(403, "Access denied")
     if not file_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
         )
-
+    # ดึงขนาดไฟล์ (byte)
     file_size = file_path.stat().st_size
+    # เดาประเภทไฟล์ (MIME type) เช่น video/mp4, image/jpeg
     media_type, _ = mimetypes.guess_type(str(file_path))
     media_type = media_type or "application/octet-stream"
 
     if range_header:
+        # แปลง Range header เช่น bytes=1000-5000  ให้กลายเป็น (start, end)
         byte_range = parse_range_header(range_header, file_size)
         if not byte_range:
             raise HTTPException(
@@ -1118,10 +1210,11 @@ def get_uploaded_file(
                 detail="Invalid range",
             )
         start, end = byte_range
+        # Header ที่จำเป็นสำหรับ partial content
         headers = {
-            "Content-Range": f"bytes {start}-{end}/{file_size}",
-            "Accept-Ranges": "bytes",
-            "Content-Length": str(end - start + 1),
+            "Content-Range": f"bytes {start}-{end}/{file_size}",  # บอกช่วง byte ที่ส่ง
+            "Accept-Ranges": "bytes",  # บอกว่า server รองรับ range request
+            "Content-Length": str(end - start + 1),  # บอกขนาดไฟล์ที่ส่ง
         }
         return StreamingResponse(
             iter_file_chunks(file_path, start, end),
@@ -1131,8 +1224,8 @@ def get_uploaded_file(
         )
 
     headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Length": str(file_size),
+        "Accept-Ranges": "bytes",  # บอกว่า server รองรับ range request
+        "Content-Length": str(file_size),  # บอกขนาดไฟล์ที่ส่ง
     }
     return StreamingResponse(
         iter_file_chunks(file_path, 0, file_size - 1),
@@ -1141,6 +1234,7 @@ def get_uploaded_file(
     )
 
 
+# สมัครสมาชิก
 @app.post("/signup")
 async def signup(request: Request) -> JSONResponse:
     payload = await extract_request_payload(request)
@@ -1158,10 +1252,11 @@ async def signup(request: Request) -> JSONResponse:
         return JSONResponse(
             {"message": "Email already exists"}, status_code=status.HTTP_400_BAD_REQUEST
         )
-
+    # เข้ารหัส
     hashed_password = generate_password_hash(
         password, method="pbkdf2:sha256", salt_length=8
     )
+    # บันทึกข้อมูล
     users_collection.insert_one(
         {"email": email, "username": username, "password": hashed_password}
     )
@@ -1170,6 +1265,9 @@ async def signup(request: Request) -> JSONResponse:
     )
 
 
+MAX_FAILED_ATTEMPTS = 10
+LOCKOUT_DURATION_MINUTES = 30
+# ล็อกอิน
 @app.post("/login")
 async def login(request: Request) -> JSONResponse:
     payload = await extract_request_payload(request)
@@ -1185,7 +1283,19 @@ async def login(request: Request) -> JSONResponse:
     user = users_collection.find_one({"email": email})
     if not user:
         return JSONResponse(
-            {"error": "User not found"}, status_code=status.HTTP_404_NOT_FOUND
+            {"error": "Invalid credentials"}, 
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    # ตรวจสอบว่าบัญชีถูกล็อกหรือไม่
+    locked_until = user.get("locked_until")
+    if locked_until and isinstance(locked_until, datetime) and locked_until > datetime.utcnow():
+        remaining = (locked_until - datetime.utcnow()).total_seconds()
+        return JSONResponse(
+            {
+                "error": f"Account temporarily locked. Try again in {int(remaining)} seconds."
+            },
+            status_code=status.HTTP_423_LOCKED,
         )
 
     stored_password = user.get("password")
@@ -1196,14 +1306,34 @@ async def login(request: Request) -> JSONResponse:
         )
 
     if not check_password_hash(stored_password, password):
-        return JSONResponse(
-            {"error": "Incorrect password"}, status_code=status.HTTP_400_BAD_REQUEST
+        # เพิ่มจำนวนครั้งที่ล้มเหลว
+        new_attempts = user.get("failed_login_attempts", 0) + 1
+        update_fields = {"failed_login_attempts": new_attempts}
+        # ถ้าครั้งที่ล้มเหลวเกิน
+        if new_attempts >= MAX_FAILED_ATTEMPTS:
+            lock_time = datetime.utcnow() + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+            update_fields["locked_until"] = lock_time
+        # อัปเดตข้อมูล
+        users_collection.update_one(
+            {"email": email},
+            {"$set": update_fields}
         )
+        return JSONResponse(
+            {"error": "Invalid credentials"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # ล็อกอินสำเร็จ → รีเซ็ต attempts และลบ lock
+    users_collection.update_one(
+        {"email": email},
+        {"$set": {"failed_login_attempts": 0}, "$unset": {"locked_until": ""}}
+    )
 
     token = generate_token(email)
     return JSONResponse({"message": "Login successful", "token": token})
 
 
+# ฟังก์ชันนี้มีหน้าที่แปลงค่า raw_value ให้กลายเป็น List[str] เสมอ ["cigarate","violence"]
 def parse_analysis_types_value(raw_value: Any) -> List[str]:
     if raw_value is None:
         return []
@@ -1222,6 +1352,7 @@ def parse_analysis_types_value(raw_value: Any) -> List[str]:
     return [str(raw_value)]
 
 
+# ฟังก์ชันนี้แปลงค่า thresholds ให้เป็น Dict[str, float] เช่น {"weapon": 0.7, "violence": 0.8}
 def parse_thresholds_value(raw_value: Any) -> Dict[str, float]:
     if not raw_value:
         return {}
@@ -1246,6 +1377,7 @@ def parse_thresholds_value(raw_value: Any) -> Dict[str, float]:
     return {}
 
 
+# ฟังก์ชันนี้แปลงค่า output_modes ให้เป็น List[str] เช่น ["weapon","violence"]
 def parse_output_modes_value(raw_value: Any) -> List[str]:
     if not raw_value:
         return []
@@ -1280,21 +1412,27 @@ def parse_output_modes_value(raw_value: Any) -> List[str]:
     return modes
 
 
+# ฟังก์ชันนี้แปลงค่า datetime ให้เป็น string เช่น "2025-12-19T12:34:56Z" เอาไว้เเก้ time zone ไม่ตรงกัน
 def serialize_datetime(value: Any) -> Optional[str]:
+    # เช็คว่าเป็น datetime ไหม
     if not isinstance(value, datetime):
         return None
+    # ใส่ timezone ถ้ายังไม่มี
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
+    # แปลงเป็น UTC เสมอ
     return value.astimezone(timezone.utc).isoformat()
 
 
+# จัดการการอัปโหลดรูปภาพและวิเคราะห์รูปภาพ
 @app.post("/analyze-image")
 async def analyze_image(
     request: Request,
     images: List[UploadFile] = File(
+        # ต้องมี (Required)
         ...,
         description="ไฟล์ภาพหรือ .zip ที่มีภาพ (ส่งได้หลายไฟล์)",
-        max_files=100,  # ต้องใช้ FastAPI >= 0.100.0
+        max_files=100,
     ),
     analysis_types: Optional[str] = Form(
         None, description="เช่น `['porn','weapon']` หรือ `porn,weapon`"
@@ -1306,11 +1444,11 @@ async def analyze_image(
         None, description='เช่น `["bbox","blur"]` หรือ `bbox,blur`'
     ),
 ):
-    # Check if the request is in demo mode
+    # ตรวจสอบว่าใช้โหมด demo หรือไม่
     is_demo = getattr(request.state, "is_demo_mode", False)
 
     if is_demo:
-        # Demo mode: Use safe default values
+        # โหมด demo: ใช้ค่า default
         api_key_data = {
             "email": "demo@demo.com",
             "api_key": "demo",
@@ -1321,7 +1459,7 @@ async def analyze_image(
             "plan": "demo",
         }
     else:
-        # Normal mode: Require x-api-key
+        # โหมดปกติ: ต้องใช้ x-api-key
         x_api_key = request.headers.get("x-api-key")
         if not x_api_key:
             raise HTTPException(401, "Missing x-api-key")
@@ -1329,7 +1467,7 @@ async def analyze_image(
         if not api_key_data:
             raise HTTPException(401, "Invalid API Key")
 
-    # Call the internal image analysis logic
+    # เรียกใช้ฟังก์ชันวิเคราะห์รูปภาพ
     return await _analyze_image_internal(
         request=request,
         api_key_data=api_key_data,
@@ -1348,20 +1486,23 @@ async def _analyze_image_internal(
     thresholds: Optional[str],
     output_modes: Optional[str],
 ):
+    # เริ่มต้นการวิเคราะห์รูปภาพ
     start_time = time.time()
     files_payload: List[Dict[str, str]] = []
     skipped_entries: List[Dict[str, Any]] = []
     MAX_TOTAL_IMAGES = 100
 
     try:
-        # --- 1. อ่านเนื้อหาไฟล์ทั้งหมดเข้า memory (ครั้งเดียว) ---
+        # 1. อ่านเนื้อหาไฟล์ทั้งหมดเข้า memory (ครั้งเดียว)
         prepared_files = []
         for upload in images:
             user_provided_name = upload.filename or "upload"
-            original_name = sanitize_filename(user_provided_name)
+            original_name = sanitize_filename(
+                user_provided_name
+            )  # ลบ path ออกให้เหลือแต่ชื่อไฟล์
             extension = Path(original_name).suffix.lower()
 
-            # ดึง extension จาก content-type ถ้าไม่มี
+            # เดา extension จาก content-type ถ้าไม่มี
             if not extension:
                 extension = CONTENT_TYPE_EXTENSION_MAP.get(
                     (upload.content_type or "").lower(), ""
@@ -1369,17 +1510,19 @@ async def _analyze_image_internal(
                 if extension and not original_name.lower().endswith(extension):
                     original_name = f"{original_name}{extension}"
 
-            content = await upload.read()
+            content = await upload.read()  # อ่านข้อมูลของไฟล์ที่ user อัปโหลดมา
             await upload.close()
 
-            # Validate file size/content
+            # ตรวจสอบขนาดไฟล์และเนื้อหา
             temp_io = BytesIO(content)
+            # ตรวจสอบไฟล์ zip
             if extension == ".zip":
                 validate_zip_file(temp_io)
+            # ตรวจสอบไฟล์รูปภาพ
             elif extension in ALLOWED_IMAGE_EXTENSIONS:
                 validate_image_size(temp_io)
 
-            # ✅ สร้างชื่อสุ่มสำหรับบันทึกจริง
+            # สร้างชื่อสุ่มสำหรับบันทึกจริง
             random_name = f"img_{uuid.uuid4()}{extension}"
 
             prepared_files.append(
@@ -1391,17 +1534,21 @@ async def _analyze_image_internal(
                 }
             )
 
-        # --- 2. นับจำนวนภาพรวม (รวมใน ZIP) ---
+        # นับจำนวนภาพรวม (รวมใน ZIP)
         total_image_count = 0
         for item in prepared_files:
             ext = item["extension"]
             if ext == ".zip":
                 try:
+                    # นับจำนวนภาพในไฟล์ zip
                     with zipfile.ZipFile(BytesIO(item["content"])) as archive:
                         for member in archive.infolist():
+                            # ข้าม folder
                             if member.is_dir():
                                 continue
+                            # ตรวจนามสกุล
                             member_ext = Path(member.filename).suffix.lower()
+                            # ถ้าเป็นรูป → นับ
                             if member_ext in ALLOWED_IMAGE_EXTENSIONS:
                                 total_image_count += 1
                 except zipfile.BadZipFile:
@@ -1415,20 +1562,20 @@ async def _analyze_image_internal(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Total number of images (including inside ZIP files) must not exceed {MAX_TOTAL_IMAGES}.",
             )
-
+        # ถ้าไม่มีภาพที่ถูกต้องเลย → แจ้ง error กลับไปพร้อมกับรายการที่ถูกข้าม
         if total_image_count == 0:
             return JSONResponse(
                 {"error": "No valid image files provided", "skipped": skipped_entries},
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        # --- 3. ประมวลผลไฟล์จริง ---
+        # ประมวลผลไฟล์จริง
         for item in prepared_files:
             original_name = item["original_name"]
             random_name = item["random_name"]
             extension = item["extension"]
             content = item["content"]
-
+            # แตก ZIP แล้วดึงรูปภาพออกมาเพื่อเตรียมส่งเข้า AI ครับ
             if extension == ".zip":
                 try:
                     with zipfile.ZipFile(BytesIO(content)) as archive:
@@ -1440,7 +1587,7 @@ async def _analyze_image_internal(
                             )
                             member_ext = Path(member_original_name).suffix.lower()
                             if (
-                                not member_ext
+                                not member_ext  # ไม่มี extension
                                 or member_ext not in ALLOWED_IMAGE_EXTENSIONS
                             ):
                                 skipped_entries.append(
@@ -1450,8 +1597,9 @@ async def _analyze_image_internal(
                                     }
                                 )
                                 continue
-                            # ✅ ใช้ชื่อสุ่มสำหรับไฟล์ใน ZIP ด้วย
+                            # ใช้ชื่อสุ่มสำหรับไฟล์ใน ZIP
                             member_random_name = f"img_{uuid.uuid4()}{member_ext}"
+                            # บันทึกไฟล์ที่แตกออกมาแล้วเข้าโฟลเดอร์อัปโหลดเหมือนกับไฟล์ปกติ
                             files_payload.append(
                                 save_bytes_to_uploads(
                                     archive.read(member), member_ext, member_random_name
@@ -1463,34 +1611,39 @@ async def _analyze_image_internal(
                     )
                 continue
 
-            # --- กรณีไฟล์เดี่ยว ---
+            # กรณีไฟล์เดี่ยว
             if extension not in ALLOWED_IMAGE_EXTENSIONS:
                 skipped_entries.append(
                     {"name": original_name, "reason": "unsupported_extension"}
                 )
                 continue
 
-            # ✅ ใช้ชื่อสุ่มในการบันทึก
-            temp_file = BytesIO(content)
+            # ใช้ชื่อสุ่มในการบันทึก
+            temp_file = BytesIO(content)  # สร้างไฟล์ชั่วคราวใน memory
             temp_upload = UploadFile(filename=random_name, file=temp_file)
             record = await save_upload_file(temp_upload, original_name=random_name)
-            # เก็บ original_name ไว้ใน record สำหรับ response
+            # เก็บ original_name ไว้ใน record สำหรับ response เอาไปใช้แสดงผลใน ประวัติ key
             record["original_filename"] = original_name
             files_payload.append(record)
 
-        # --- 4-6. วิเคราะห์ config, ประมวลผล, สรุปผล (เหมือนเดิม) ---
+        # วิเคราะห์ config, ประมวลผล, สรุปผล
+        # หา analysis types ที่ต้องใช้ ใช้ค่าที่ user ส่งมา (analysis_types) ก่อน ถ้า user ไม่ส่ง → ใช้ default จาก API key
         resolved_analysis_types = parse_analysis_types_value(
             analysis_types
         ) or parse_analysis_types_value(api_key_data.get("analysis_types"))
+        # ตรวจสอบว่า analysis types ที่ได้มีอยู่ในระบบไหม ถ้าไม่มีเลย → แจ้ง error กลับไป
         resolved_analysis_types = [m for m in resolved_analysis_types if m in models]
+        # ถ้า list ว่าง = ไม่มี model ที่ถูกเลือกเลย → แจ้ง error กลับไป
         if not resolved_analysis_types:
             for rec in files_payload:
-                remove_stored_file(rec)
+                remove_stored_file(
+                    rec
+                )  # ลบไฟล์ที่อัปโหลดมาแล้วทิ้งทั้งหมด เพราะไม่มี model ให้วิเคราะห์เลย
             raise HTTPException(
                 status_code=400,
                 detail="กรุณาเลือกโมเดลอย่างน้อย 1 โมเดล (เช่น porn, weapon)",
             )
-
+        # ตรวจสิทธิ์ API Key ["Image"]
         media_access = {
             str(x).lower() for x in api_key_data.get("media_access", []) if x
         }
@@ -1500,13 +1653,15 @@ async def _analyze_image_internal(
             raise HTTPException(
                 status_code=403, detail="API Key ไม่รองรับการวิเคราะห์รูปภาพ"
             )
-
+        # เอาจาก API Key ก่อน ถ้าไม่มีค่อยเอาจาก request
         resolved_thresholds = parse_thresholds_value(api_key_data.get("thresholds"))
+        # ถ้า API key ไม่มี → ใช้ค่าจาก request
         if not resolved_thresholds:
             resolved_thresholds = parse_thresholds_value(thresholds)
+        # ใส่ค่า default ให้โมเดลที่ไม่มี
         for model_type in resolved_analysis_types:
             resolved_thresholds.setdefault(model_type, 0.5)
-
+        # เอาจาก API Key ก่อน ถ้าไม่มีค่อยเอาจาก request
         resolved_output_modes = parse_output_modes_value(
             api_key_data.get("output_modes")
         )
@@ -1514,7 +1669,7 @@ async def _analyze_image_internal(
             resolved_output_modes = parse_output_modes_value(output_modes)
         if not resolved_output_modes:
             resolved_output_modes = ["bbox", "blur"]
-
+        # แปลงเป็น flag ใช้งานจริง true/false
         include_bbox = "bbox" in resolved_output_modes
         include_blur = "blur" in resolved_output_modes
 
@@ -1522,12 +1677,12 @@ async def _analyze_image_internal(
         processed_count = 0
         email = api_key_data.get("email")
         api_key = api_key_data.get("api_key")
-
+        # จำกัดจำนวนการวิเคราะห์พร้อมกันเพื่อป้องกัน overload
         async with analysis_concurrency_limiter:
             for record in files_payload:
                 file_path = record["file_path"]
                 original_name = record["original_filename"]  # ใช้ชื่อเดิมจากผู้ใช้
-
+                # ตรวจสอบว่าไฟล์ที่บันทึกไว้เป็นรูปภาพที่สามารถเปิดได้ไหม ถ้าไม่ใช่ → ลบไฟล์ทิ้งและแจ้ง error ในผลลัพธ์
                 if not is_image(file_path):
                     remove_stored_file(record)
                     results.append(
@@ -1538,7 +1693,7 @@ async def _analyze_image_internal(
                         }
                     )
                     continue
-
+                # ถ้าเป็นรูปภาพที่เปิดได้ → ส่งไปประมวลผลกับ AI
                 try:
                     output_image, blurred_output, detections = await run_in_threadpool(
                         process_image_file_for_models,
@@ -1546,14 +1701,14 @@ async def _analyze_image_internal(
                         resolved_analysis_types,
                         resolved_thresholds,
                     )
-
+                    # สรุปจำนวนการตรวจจับแต่ละโมเดลในภาพนี้
                     model_summary = defaultdict(int)
                     for d in detections:
                         model_summary[d.get("model_type", "unknown")] += 1
 
                     processed_filename = blurred_filename = None
                     processed_url = blurred_url = None
-
+                    # บันทึกภาพที่ประมวลผลแล้ว (ถ้ามี) และสร้าง URL สำหรับแสดงผล
                     if include_bbox:
                         processed_filename = f"processed_{uuid.uuid4()}.jpg"
                         processed_path = UPLOAD_FOLDER / processed_filename
@@ -1569,7 +1724,7 @@ async def _analyze_image_internal(
                                 "uploaded_file", filename=processed_filename
                             )
                         )
-
+                    # ถ้าเปิดใช้งานโหมด blur → บันทึกภาพที่เบลอแล้วและสร้าง URL สำหรับแสดงผล
                     if include_blur:
                         blurred_filename = f"blurred_{uuid.uuid4()}.jpg"
                         blurred_path = UPLOAD_FOLDER / blurred_filename
@@ -1583,14 +1738,14 @@ async def _analyze_image_internal(
                         blurred_url = str(
                             request.url_for("uploaded_file", filename=blurred_filename)
                         )
-
+                    # ตรวจสอบผลการตรวจจับทั้งหมดในภาพนี้ว่าผ่านเกณฑ์ที่กำหนดไหม
                     status_result = "passed"
                     for d in detections:
                         th = float(resolved_thresholds.get(d.get("model_type"), 0.5))
                         if d.get("confidence", 0) > th:
                             status_result = "inappropriate"
                             break
-
+                    # สร้างผลลัพธ์สำหรับภาพนี้และเพิ่มเข้าไปในรายการผลลัพธ์ทั้งหมด
                     result_entry = {
                         "original_filename": original_name,
                         "status": status_result,
@@ -1601,7 +1756,7 @@ async def _analyze_image_internal(
                     }
                     results.append(result_entry)
                     processed_count += 1
-
+                    # เก็บ log การใช้งาน API Key สำหรับการวิเคราะห์ภาพนี้
                     log_api_key_usage_event(
                         api_key=api_key,
                         email=email,
@@ -1636,7 +1791,8 @@ async def _analyze_image_internal(
                     remove_stored_file(record)
                 finally:
                     Path(file_path).unlink(missing_ok=True)
-
+        # สรุปสถานะโดยรวมของการวิเคราะห์ทั้งหมดในครั้งนี้
+        # เอาเฉพาะผลที่ วิเคราะห์สำเร็จจริง
         valid_results = [
             r for r in results if r["status"] in ("passed", "inappropriate")
         ]
@@ -1646,11 +1802,12 @@ async def _analyze_image_internal(
             else "passed" if valid_results else "error"
         )
 
-        # --- สร้าง summary แบบรวมทุกภาพ ---
+        # สร้าง summary แบบรวมทุกภาพ
         aggregated_summary = defaultdict(int)
         for result in results:
             if (
-                result["status"] in ("passed", "inappropriate")
+                result["status"]
+                in ("passed", "inappropriate")  # เอาเฉพาะผลที่วิเคราะห์สำเร็จ
                 and "detections" in result
             ):
                 for det in result["detections"]:
@@ -1658,8 +1815,8 @@ async def _analyze_image_internal(
                     if label:
                         aggregated_summary[label] += 1
 
-        summary_dict = dict(aggregated_summary)
-        summary_labels = list(summary_dict.keys())
+        summary_dict = dict(aggregated_summary)  # {"weapon": 5, "violence": 2}
+        summary_labels = list(summary_dict.keys())  # ["weapon", "violence"]
 
         response_payload = {
             "status": overall_status,
@@ -1667,10 +1824,10 @@ async def _analyze_image_internal(
             "skipped": skipped_entries,
             "processed_count": processed_count,
             "output_modes": resolved_output_modes,
-            "summary": summary_dict,  # ← เพิ่มตรงนี้
-            "summary_labels": summary_labels,  # ← เพิ่มตรงนี้
+            "summary": summary_dict,
+            "summary_labels": summary_labels,
         }
-
+        # ถ้าแค่ภาพเดียว → ใส่ข้อมูลรายละเอียดของภาพนั้นๆ ไว้ในระดับบนสุดของ response ด้วยเลย เพื่อความสะดวกในการใช้งาน
         if len(valid_results) == 1:
             single = valid_results[0]
             response_payload.update(
@@ -1683,7 +1840,16 @@ async def _analyze_image_internal(
                     ),
                 }
             )
-
+        # อัปเดตการใช้งาน API Key (ยกเว้นโหมด demo)
+        if not getattr(request.state, "is_demo_mode", False):
+            api_keys_collection.update_one(
+                {"api_key": api_key_data["api_key"]},
+                {
+                    "$set": {"last_used_at": datetime.utcnow()},
+                    "$inc": {"usage_count": 1},
+                },
+            )
+        # จัดการเวลาในการประมวลผลทั้งหมดและแสดงใน log
         end_time = time.time()
         print(f"Image processing time: {end_time - start_time:.2f} seconds")
         return JSONResponse(response_payload)
@@ -1743,26 +1909,26 @@ async def _analyze_video_internal(
     thresholds_form: Optional[str],
 ):
     start_time = time.time()
-    original_name = sanitize_filename(video.filename)  # Define original_name
+    original_name = sanitize_filename(video.filename)  # ลบ path ออกให้เหลือแต่ชื่อไฟล์
     if not allowed_video(original_name):
         await video.close()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unsupported video format",
         )
-
-    saved_record = await save_upload_file(
-        video, original_name=original_name
-    )  # Pass original_name
+    # บันทึกไฟล์วิดีโอที่อัปโหลดมาไว้ชั่วคราวก่อนประมวลผล
+    saved_record = await save_upload_file(video, original_name=original_name)
     temp_path = Path(saved_record["file_path"])
 
     try:
-        validate_video_file(temp_path)
+        validate_video_file(
+            temp_path
+        )  # ตรวจสอบว่าเป็นไฟล์วิดีโอที่เปิดได้ไหม ถ้าไม่ใช่ → ลบไฟล์ทิ้งและแจ้ง error กลับไป
     except HTTPException:
         remove_stored_file(saved_record)
         raise
 
-    # prefer form-specified analysis_types when provided, otherwise use the api key's configured types
+    # หา analysis types ที่ต้องใช้ ใช้ค่าที่ user ส่งมา (analysis_types_form) ก่อน ถ้า user ไม่ส่ง → ใช้ default จาก API key
     if analysis_types_form:
         analysis_types = parse_analysis_types_value(analysis_types_form)
     else:
@@ -1773,7 +1939,7 @@ async def _analyze_video_internal(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="No analysis_types provided"
         )
-
+    # ตรวจสิทธิ์ API Key ["Video"]
     media_access_config = {
         str(item).lower() for item in api_key_data.get("media_access", []) if item
     }
@@ -1783,22 +1949,22 @@ async def _analyze_video_internal(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="API Key ไม่รองรับการวิเคราะห์วิดีโอ",
         )
-
+    # เอาจาก API Key ก่อน ถ้าไม่มี → ใช้ค่าจาก request
     thresholds = parse_thresholds_value(api_key_data.get("thresholds"))
     if not thresholds:
         thresholds = parse_thresholds_value(thresholds_form)
     for model_type in analysis_types:
         thresholds.setdefault(model_type, 0.5)
-
+    # เอาจาก API Key ก่อน ถ้าไม่มี → ใช้ค่าจาก request
     output_modes_config = set(
         parse_output_modes_value(api_key_data.get("output_modes"))
     )
     if not output_modes_config:
         output_modes_config = {"bbox", "blur"}
-
+    # แปลงเป็น flag ใช้งานจริง true/false
     include_bbox = not output_modes_config or "bbox" in output_modes_config
     include_blur = not output_modes_config or "blur" in output_modes_config
-
+    # จำกัดจำนวนการวิเคราะห์พร้อมกันเพื่อป้องกัน overload
     try:
         async with analysis_concurrency_limiter:
             processed_path, blurred_path, detections, aggregated, detection_ratio = (
@@ -1811,7 +1977,7 @@ async def _analyze_video_internal(
                     include_blur,
                 )
             )
-
+        # สร้าง URL สำหรับวิดีโอที่ประมวลผลแล้ว (ถ้ามี) และวิดีโอที่เบลอแล้ว (ถ้ามี)
         processed_filename = processed_path.name if processed_path else None
         blurred_filename = blurred_path.name if blurred_path else None
         processed_url = (
@@ -1825,12 +1991,13 @@ async def _analyze_video_internal(
             else None
         )
 
-        # Use detection_ratio to determine status
-        status_result = "inappropriate" if detection_ratio >= 0.7 else "passed"
-
+        # ตรวจสอบผลการตรวจจับทั้งหมดในวิดีโอนี้ว่าผ่านเกณฑ์ที่กำหนดไหม
+        status_result = "inappropriate" if detection_ratio >= 0.3 else "passed"
+        # สร้าง summary แบบรวมทุกการตรวจจับในวิดีโอนี้
         api_key = api_key_data.get("api_key")
         email = api_key_data.get("email")
         summary_dict = dict(aggregated)
+        # เก็บประวัติการใช้งาน API Key สำหรับการวิเคราะห์วิดีโอนี้
         log_api_key_usage_event(
             api_key=api_key,
             email=email,
@@ -1856,17 +2023,21 @@ async def _analyze_video_internal(
                 ),
             },
         )
-
-        api_keys_collection.update_one(
-            {"api_key": api_key},
-            {"$set": {"last_used_at": datetime.utcnow()}, "$inc": {"usage_count": 1}},
-        )
-
+        # อัปเดตข้อมูลการใช้งาน API Key (จำนวนครั้งที่ใช้ และเวลาที่ใช้ล่าสุด)
+        if not getattr(request.state, "is_demo_mode", False):
+            api_keys_collection.update_one(
+                {"api_key": api_key},
+                {
+                    "$set": {"last_used_at": datetime.utcnow()},
+                    "$inc": {"usage_count": 1},
+                },
+            )
+        # ลบไฟล์วิดีโอที่อัปโหลดมาแล้วทิ้ง เพราะประมวลผลเสร็จแล้ว ไม่จำเป็นต้องเก็บไว้อีกต่อไป
         Path(saved_record["file_path"]).unlink(missing_ok=True)
         uploaded_files_collection.delete_one(
             {"filename": saved_record["stored_filename"]}
         )
-
+        # สรุปเวลาในการประมวลผลทั้งหมดและแสดงใน log
         end_time = time.time()
         print(f"Video processing time: {end_time - start_time:.2f} seconds")
         return {
@@ -1893,6 +2064,7 @@ async def _analyze_video_internal(
         ) from exc
 
 
+# Endpoint สำหรับขอ API Key ใหม่ (เฉพาะแผนทดสอบ test plan เท่านั้น)
 @app.post("/request-api-key")
 async def request_api_key(
     payload: Dict[str, Any],
@@ -1952,6 +2124,7 @@ async def request_api_key(
     }
 
 
+# Endpoint สำหรับรายงานปัญหาเกี่ยวกับการใช้งาน API
 @app.post("/report-issue")
 async def report_issue(payload: Dict[str, Any]):
     issue = payload.get("issue")
@@ -1976,6 +2149,7 @@ async def report_issue(payload: Dict[str, Any]):
         ) from exc
 
 
+# Endpoint สำหรับดึงข้อมูล API Keys ทั้งหมดของผู้ใช้ที่เข้าสู่ระบบอยู่
 @app.get("/get-api-keys")
 async def get_api_keys(current_user: Dict[str, Any] = Depends(get_current_user)):
     email = current_user.get("email")
@@ -2018,6 +2192,7 @@ async def get_api_keys(current_user: Dict[str, Any] = Depends(get_current_user))
     return {"api_keys": formatted_keys}
 
 
+# Endpoint สำหรับดึงประวัติการใช้งาน API Key ของผู้ใช้ที่เข้าสู่ระบบอยู่
 @app.get("/get-api-key-history")
 async def get_api_key_history(
     request: Request,
@@ -2029,25 +2204,28 @@ async def get_api_key_history(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required"
         )
-
+    # ดึง API Keys ทั้งหมดของผู้ใช้คนนี้ก่อน เพราะประวัติการใช้งานจะเชื่อมโยงกับ API Key
     key_cursor = api_keys_collection.find({"email": email}, {"api_key": 1})
+    # ดึงค่า api_key ออกมาเป็น list เพื่อใช้ในการค้นหาประวัติการใช้งานที่เกี่ยวข้องกับ API Keys เหล่านี้
     api_key_values = [doc.get("api_key") for doc in key_cursor if doc.get("api_key")]
     if not api_key_values:
         return {"history": []}
-
+    # ดึงประวัติการใช้งานทั้งหมดที่เกี่ยวข้องกับ API Keys ของผู้ใช้คนนี้ โดยเรียงจากใหม่ไปเก่า และจำกัดจำนวนผลลัพธ์ตามพารามิเตอร์ limit
     limit = 50
-    if limit_param is not None:
+    if (
+        limit_param is not None
+    ):  # ถ้าผู้ใช้ส่งพารามิเตอร์ limit มา ให้ใช้ค่าที่ส่งมา แต่ต้องอยู่ในช่วง 1-200 เท่านั้น
         try:
             limit = max(1, min(int(limit_param), 200))
         except (TypeError, ValueError):
             limit = 50
-
+    # ดึงข้อมูลประวัติการใช้งานจากฐานข้อมูล
     history_cursor = (
         api_key_usage_collection.find({"api_key": {"$in": api_key_values}})
-        .sort("created_at", -1)
-        .limit(limit)
+        .sort("created_at", -1)  # เรียงจากใหม่ไปเก่า
+        .limit(limit)  # ดึงมาแค่ 50 รายการล่าสุด
     )
-
+    # ประมวลผลข้อมูลประวัติการใช้งานแต่ละรายการเพื่อเตรียมส่งกลับใน response
     history: List[Dict[str, Any]] = []
     for entry in history_cursor:
         created_at = serialize_datetime(entry.get("created_at"))
@@ -2055,7 +2233,7 @@ async def get_api_key_history(
         processed_filename = entry.get("processed_filename")
         blurred_filename = entry.get("blurred_filename")
         media_type = str(entry.get("media_type") or "").lower()
-
+        # ถ้า media_type ไม่มีหรือไม่ชัดเจน ให้ลองเดาจากนามสกุลของไฟล์ที่ประมวลผลแล้ว
         inferred_media_type = media_type if media_type else None
         if not inferred_media_type:
             extension = (
@@ -2068,7 +2246,7 @@ async def get_api_key_history(
         if not inferred_media_type:
             inferred_media_type = "image"
         media_type = inferred_media_type
-
+        # สร้าง URL สำหรับไฟล์ที่ประมวลผลแล้วและไฟล์ที่เบลอแล้ว
         processed_url = (
             str(request.url_for("uploaded_file", filename=processed_filename))
             if processed_filename
@@ -2079,11 +2257,14 @@ async def get_api_key_history(
             if blurred_filename
             else None
         )
-
+        # สรุปผลการตรวจจับในรูปแบบที่เข้าใจง่าย โดยดึงเฉพาะ label ของการตรวจจับแต่ละรายการมาแสดงเป็น list
         detections = entry.get("detections", [])
-        detection_summary: List[str] = []
+        detection_summary: List[str] = (
+            []
+        )  # {"label":"weapon","confidence":0.9} > ["weapon","violence"]
         seen_labels: Set[str] = set()
-        if isinstance(detections, dict):
+        # ถ้า detections เป็น dict (กรณีโมเดลเก่า) ให้ดึง label จาก key ของ dict แทน
+        if isinstance(detections, dict):  # {"weapon": 2, "violence": 1}
             for label in detections.keys():
                 if label is None:
                     continue
@@ -2092,8 +2273,9 @@ async def get_api_key_history(
                     continue
                 seen_labels.add(label_str)
                 detection_summary.append(label_str)
+        # ถ้า detections เป็น list (กรณีโมเดลใหม่) ให้ดึง label จากแต่ละ dict ใน list แทน
         else:
-            for detection in detections:
+            for detection in detections:  # [{"label":"weapon"}, {"label":"violence"}]
                 if not isinstance(detection, dict):
                     continue
                 label = detection.get("label")
@@ -2104,7 +2286,7 @@ async def get_api_key_history(
                     continue
                 seen_labels.add(label_str)
                 detection_summary.append(label_str)
-
+        # สร้าง entry สำหรับประวัติการใช้งานนี้ โดยรวมข้อมูลที่สำคัญทั้งหมด
         history_entry = {
             "api_key": entry.get("api_key"),
             "original_filename": entry.get("original_filename"),
@@ -2118,11 +2300,13 @@ async def get_api_key_history(
             "output_modes": entry.get("output_modes", []),
             "created_at": created_at,
         }
-
+        # ถ้าเป็นวิดีโอ → ใส่ URL วิดีโอ ถ้าเป็นรูป → ใส่ URL รูป
         if media_type == "video":
             history_entry["processed_video_url"] = processed_url
             history_entry["processed_blurred_video_url"] = blurred_url
-            history_entry.setdefault("processed_image_url", None)
+            history_entry.setdefault(
+                "processed_image_url", None
+            )  # ถ้ายังไม่มี key นี้ → ใส่ค่า None
             history_entry.setdefault("processed_blurred_image_url", None)
         else:
             history_entry["processed_image_url"] = processed_url
@@ -2132,7 +2316,7 @@ async def get_api_key_history(
 
     return {"history": history}
 
-
+# ดึง username
 @app.get("/get-username")
 async def get_username(current_user: Dict[str, Any] = Depends(get_current_user)):
     email = current_user.get("email")
@@ -2159,21 +2343,22 @@ def download_manual() -> FileResponse:
         )
     return FileResponse(file_path)
 
-
+# สร้าง QR code
 def generate_qr_code(promptpay_id: str, amount: float = 0) -> str:
     if amount > 0:
         payload = qrcode.generate_payload(promptpay_id, amount)
     else:
         payload = qrcode.generate_payload(promptpay_id)
-
+    # สร้างรูป QR
     img = qrcode.to_image(payload)
+    # แปลงรูป QR เป็น base64
     buffered = BytesIO()
     img.save(buffered, format="PNG")
     img_str = base64.b64encode(buffered.getvalue()).decode()
 
     return f"data:image/png;base64,{img_str}"
 
-
+# สร้าง QR code
 @app.post("/generate_qr")
 async def generate_qr(
     payload: Dict[str, Any],
@@ -2210,7 +2395,7 @@ async def generate_qr(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="จำนวนเดือนต้องมากกว่าหรือเท่ากับ 1",
         )
-
+    # ประเภทวิเคราะห์
     analysis_types = parse_analysis_types_value(payload.get("analysis_types"))
     analysis_types = [atype for atype in analysis_types if atype in models]
     if not analysis_types:
@@ -2221,14 +2406,17 @@ async def generate_qr(
 
     thresholds = parse_thresholds_value(payload.get("thresholds"))
     output_modes = parse_output_modes_value(payload.get("output_modes"))
-
+    # ราคา
     monthly_price = int(package_config["monthly_price"])
     amount = monthly_price * duration_months
+    # ประเภทวิเคราะห์
     media_access = list(package_config["media_access"])
+    # เลข promtpay
     promptpay_id = payload.get("promptpay_id", "66882884744")
-
+    # ตรวจสอบว่ามีการสั่งซื้อที่ยังไม่ได้ชำระเงิน
     existing_unpaid_order = orders_collection.find_one({"email": email, "paid": False})
     if existing_unpaid_order:
+        # Compare request ว่าเหมือนเดิมไหม 
         matches_request = (
             existing_unpaid_order.get("plan") == "premium"
             and existing_unpaid_order.get("package") == package_raw
@@ -2238,6 +2426,7 @@ async def generate_qr(
             and existing_unpaid_order.get("thresholds", {}) == thresholds
             and existing_unpaid_order.get("output_modes", []) == output_modes
         )
+        # ถ้าเหมือน → reuse ได้เลย
         if matches_request:
             ref_code = existing_unpaid_order["ref_code"]
             qr_base64 = generate_qr_code(promptpay_id, float(amount))
@@ -2252,13 +2441,13 @@ async def generate_qr(
                 "message": "ใช้งานคำสั่งซื้อเดิมที่ยังไม่ชำระ",
             }
         orders_collection.delete_one({"_id": existing_unpaid_order["_id"]})
-
+    # สร้าง Ref code
     thai_time = datetime.now(ZoneInfo("Asia/Bangkok"))
     current_time = thai_time.strftime("%d/%m/%Y %H:%M:%S")
     timestamp = thai_time.strftime("%Y%m%d%H%M%S")
     random_str = secrets.token_hex(4).upper()
     ref_code = f"{current_time} {timestamp}{random_str}"
-
+    # เพื่ม order
     orders_collection.insert_one(
         {
             "ref_code": ref_code,
@@ -2276,7 +2465,7 @@ async def generate_qr(
             "created_time": datetime.now(timezone.utc),
         }
     )
-
+    # สร้าง QR code จ่ายเงิน
     qr_base64 = generate_qr_code(promptpay_id, float(amount))
     return {
         "qr_code_url": qr_base64,
@@ -2288,7 +2477,7 @@ async def generate_qr(
         "media_access": media_access,
     }
 
-
+# เมื่อผู้ใช้ไม่ได้อัป slip เข้ามาภายใน 5 นาที ระบบจะยกเลิกคำสั่งซื้อ
 @app.post("/cancel-order")
 async def cancel_order(
     payload: Optional[Dict[str, Any]] = Body(None),
@@ -2300,14 +2489,14 @@ async def cancel_order(
     query: Dict[str, Any] = {"email": current_user["email"], "paid": False}
     if ref_code:
         query["ref_code"] = ref_code
-
+    # หาคำสั่งซื้อ
     order = orders_collection.find_one(query, sort=[("created_time", -1)])
     if not order:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="ไม่พบคำสั่งซื้อที่สามารถยกเลิกได้",
         )
-
+    # ลบคำสั่งซื้อ
     orders_collection.delete_one({"_id": order["_id"]})
     return {
         "success": True,
@@ -2321,13 +2510,17 @@ def check_qrcode(image_path: str) -> bool:
     if image is None:
         print(f"[DEBUG] โหลดภาพไม่ได้: {image_path}")
         return False
+    # สร้าง QR detector
     detector = cv2.QRCodeDetector()
-    data, points, _ = detector.detectAndDecode(image)
+    # แปลงเป็น grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # ตรวจจับ + decode
+    data, points, _ = detector.detectAndDecode(gray)
     print(f"[DEBUG] QR points: {points is not None}")
     print(f"[DEBUG] QR data: {repr(data)}")
     return points is not None and bool(data)
 
-
+# ตรวจสอบข้อมูลใน slip 
 @app.post("/upload-receipt")
 async def upload_receipt(
     receipt: UploadFile = File(...),
@@ -2335,9 +2528,11 @@ async def upload_receipt(
 ):
     save_path: Optional[Path] = None
     try:
+        # ตั้งชื่อไฟล์
         filename = sanitize_filename(receipt.filename)
         save_path = UPLOAD_FOLDER / filename
         content = await receipt.read()
+        # บันทึกไฟล์ลง disk
         with open(save_path, "wb") as fh:
             fh.write(content)
         await receipt.close()
@@ -2362,6 +2557,7 @@ async def upload_receipt(
 
         try:
             image = Image.open(save_path).convert("RGB")
+            # ส่งเข้า OCR
             ocr_data = ocr_engine.extract_info(image)
             print("=== OCR DATA ===")
             print(ocr_data)
@@ -2392,12 +2588,12 @@ async def upload_receipt(
         amount = ocr_data["amount"]
         full_name = ocr_data["full_name"]
         time_receipts = ocr_data["time_receipts"]
-
+        # ตรวจสอบว่ามีคำสั่งซื้อที่ยังไม่ชำระเงิน
         matched_order = orders_collection.find_one(
             {"email": current_user["email"], "paid": False},
             sort=[("created_time", -1)],
         )
-
+        # ถ้าไม่พบคำสั่งซื้อที่ยังไม่ชำระเงิน
         if not matched_order:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -2411,15 +2607,16 @@ async def upload_receipt(
             "นายภูรินทร์",
             "นาย ภูรินทร์",
             "นายภูรินทร์ สุขมั่น",
-            "นาย ภูรินทร์ สุขมั่น"
+            "นาย ภูรินทร์ สุขมั่น",
         ]
+        # ตรวจสอบชื่อผู้รับเงิน
         full_name_clean = full_name.strip().replace(" ", "").lower()
         allowed_names_clean = [name.replace(" ", "").lower() for name in allowed_names]
         if not any(name in full_name_clean for name in allowed_names_clean):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="ชื่อผู้รับเงินไม่ถูกต้อง"
             )
-
+        # ตรวจสอบวันที่และเวลา
         try:
             created_datetime = datetime.strptime(
                 matched_order["created_at"], "%d/%m/%Y %H:%M:%S"
@@ -2459,10 +2656,13 @@ async def upload_receipt(
 
         if time_receipts:
             try:
+                # ตรวจสอบเวลา
                 time_from_ocr = datetime.strptime(time_receipts, "%H:%M")
+                # รวมวันที่จาก order
                 time_from_ocr_full = datetime.combine(
                     created_datetime.date(), time_from_ocr.time()
                 )
+                # คำนวนความแตกต่าง จำนวนวินาที แปลงเป็นวินาที
                 time_diff = abs((created_datetime - time_from_ocr_full).total_seconds())
                 if time_diff > 300:
                     raise HTTPException(
@@ -2487,7 +2687,7 @@ async def upload_receipt(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="ยอดเงินไม่สามารถแปลงได้",
                 ) from exc
-
+        # อัปเดทorder เป็น paid=True
         orders_collection.update_one(
             {"_id": matched_order["_id"]},
             {
@@ -2497,7 +2697,7 @@ async def upload_receipt(
                 }
             },
         )
-
+        # สร้าง api_key
         api_key = str(uuid.uuid4())
         plan = matched_order.get("plan", "premium")
         package = matched_order.get("package")
@@ -2511,7 +2711,7 @@ async def upload_receipt(
 
         if plan in {"paid", "monthly"}:
             plan = "premium"
-
+        # สร้าง thresholds
         raw_thresholds = matched_order.get("thresholds", {})
         thresholds_payload = {}
         if isinstance(raw_thresholds, dict):
@@ -2520,12 +2720,13 @@ async def upload_receipt(
                     thresholds_payload[key] = float(value)
                 except (TypeError, ValueError):
                     continue
-
+        # สร้าง media_access
         media_access = matched_order.get("media_access") or []
         if not media_access and package in PREMIUM_PLAN_PACKAGES:
             media_access = list(PREMIUM_PLAN_PACKAGES[package]["media_access"])
         if not media_access:
             media_access = ["image", "video"]
+        # สร้าง output_modes
         output_modes = matched_order.get("output_modes") or []
         if not output_modes:
             output_modes = ["bbox", "blur"]
@@ -2543,7 +2744,7 @@ async def upload_receipt(
             "usage_count": 0,
             "last_used_at": None,
         }
-
+        # สร้าง expires_at
         if plan == "premium":
             # insert_data["expires_at"] = datetime.now(timezone.utc) + timedelta(seconds=30)
             insert_data["expires_at"] = datetime.now(timezone.utc) + relativedelta(
@@ -2551,6 +2752,7 @@ async def upload_receipt(
             )
 
         api_keys_collection.insert_one(insert_data)
+        # ลบ order
         orders_collection.delete_one({"_id": matched_order["_id"]})
 
         return {
@@ -2649,7 +2851,7 @@ async def google_callback(request: Request, code: Optional[str] = None):
     )
     return RedirectResponse(redirect_url)
 
-
+# ขอ OTP
 @app.post("/reset-request")
 async def reset_request(
     payload: Dict[str, Any],
@@ -2670,7 +2872,7 @@ async def reset_request(
     send_email_message("OTP สำหรับรีเซ็ตรหัสผ่าน", f"รหัส OTP ของคุณคือ: {otp}", [email])
     return {"message": "ส่ง OTP แล้ว"}
 
-
+# ตรวจสอบ OTP
 @app.post("/verify-otp")
 async def verify_otp(payload: Dict[str, Any]):
     email = payload.get("email")
@@ -2687,12 +2889,12 @@ async def verify_otp(payload: Dict[str, Any]):
             status_code=status.HTTP_400_BAD_REQUEST, detail="OTP หมดอายุแล้ว"
         )
 
-    # Mark OTP as used to prevent reuse
+    # mark ว่าใช้ otp แล้ว
     otp_collection.update_one({"email": email, "otp": otp}, {"$set": {"used": True}})
 
     return {"message": "OTP ถูกต้อง"}
 
-
+# รีเซ็ตรหัสผ่าน
 @app.post("/reset-password")
 async def reset_password(payload: Dict[str, Any]):
     email = payload.get("email")
@@ -2707,7 +2909,7 @@ async def reset_password(payload: Dict[str, Any]):
             status_code=status.HTTP_400_BAD_REQUEST, detail="รหัสผ่านไม่ตรงกัน"
         )
 
-    # Don't check "used": False because it was already marked as used in verify-otp
+    # ตรวจสอบเวลา otp
     record = otp_collection.find_one({"email": email, "otp": otp})
     if not record or record["otp_expiration"] < datetime.utcnow():
         print(f"[DEBUG] OTP record not found or expired for {email}")
@@ -2723,7 +2925,7 @@ async def reset_password(payload: Dict[str, Any]):
         )
         print(f"[DEBUG] Generated password hash: {str(hashed_password)[:50]}...")
 
-        # Check if user exists
+        # ตรวจสอบว่ามีผู้ใช้ไหม
         user_before = users_collection.find_one({"email": email})
         if not user_before:
             print(f"[DEBUG] User not found: {email}")
@@ -2743,14 +2945,14 @@ async def reset_password(payload: Dict[str, Any]):
             f"[DEBUG] Update result - matched: {result.matched_count}, modified: {result.modified_count}"
         )
 
-        # Verify the update
+        # ตรวจสอบการอัปเดต
         user_after = users_collection.find_one({"email": email})
         new_pass = user_after.get("password", "") if user_after else ""
         print(
             f"[DEBUG] New password hash: {str(new_pass)[:50] if new_pass else 'None'}..."
         )
 
-        # Clean up OTP after successful password reset
+        # ลบ otp หลังจากเปลี่ยนรหัสผ่านสำเร็จ
         otp_collection.delete_one({"email": email, "otp": otp})
         print(f"[DEBUG] OTP deleted for {email}")
 
@@ -2768,7 +2970,7 @@ async def reset_password(payload: Dict[str, Any]):
 
     return {"message": "รีเซ็ตรหัสผ่านเรียบร้อยแล้ว"}
 
-
+# เส้นทางไฟล์
 @app.get("/{filename:path}")
 def serve_other_files(filename: str) -> FileResponse:
     file_path = BASE_DIR / filename
@@ -2778,11 +2980,13 @@ def serve_other_files(filename: str) -> FileResponse:
         )
     return FileResponse(file_path)
 
-
+# ลบไฟล์ที่หมดอายุ
 def cleanup_expired_files() -> None:
     try:
         current_files = set(os.listdir(UPLOAD_FOLDER))
+        # ดึงชื่อไฟล์ที่ยังใช้งานอยู่จากฐานข้อมูล
         active_files = set(doc["filename"] for doc in uploaded_files_collection.find())
+        # คำนวณไฟล์ที่หมดอายุ (มีใน current_files แต่ไม่มีใน active_files)
         expired_files = current_files - active_files
         for fname in expired_files:
             try:
@@ -2796,7 +3000,7 @@ def cleanup_expired_files() -> None:
     except Exception as exc:
         print(f"Cleanup system error: {exc}")
 
-
+# เริ่มต้นการลบไฟล์ที่หมดอายุ
 def start_cleanup_scheduler() -> None:
     import threading
     import time
@@ -2804,7 +3008,7 @@ def start_cleanup_scheduler() -> None:
     def run():
         while True:
             cleanup_expired_files()
-            time.sleep(300)
+            time.sleep(604800)  # รันทุก 7 วัน
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()

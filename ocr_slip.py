@@ -23,9 +23,10 @@ logger = logging.getLogger(__name__)
 
 class AdvancedSlipOCR:
     def __init__(self):
-        """เริ่มต้นระบบ OCR ที่ทันสมัย"""
+
         # โหลด environment variables
         load_dotenv()
+        # ดึง API key Typhoon จาก environment variable
         self.api_key = os.getenv("TYPHOON_OCR_API_KEY")
         if not self.api_key:
             logger.warning("TYPHOON_OCR_API_KEY not found in environment variables")
@@ -103,14 +104,17 @@ class AdvancedSlipOCR:
             "ธ.ค": "12",
             "ธค": "12",
         }
+        # ตั้งค่าการ cache สำหรับผลลัพธ์ OCR
         self._cache_enabled = os.getenv("OCR_CACHE_ENABLED", "true").lower() == "true"
         self._cache_max_entries = max(int(os.getenv("OCR_CACHE_SIZE", "8")), 1)
         self._cache_lock = threading.Lock()
         self._cache: "OrderedDict[str, Dict]" = OrderedDict()
 
+    # ฟังก์ชันสำหรับสร้าง hash ของภาพเพื่อใช้เป็น key ใน cache
     def _hash_image(self, image: np.ndarray) -> str:
         return hashlib.sha256(image.tobytes()).hexdigest()
 
+    # ฟังก์ชันสำหรับดึงผลลัพธ์จาก cache
     def _cache_get(self, key: str) -> Optional[Dict]:
         if not self._cache_enabled:
             return None
@@ -121,6 +125,7 @@ class AdvancedSlipOCR:
             self._cache.move_to_end(key)
             return dict(cached)
 
+    # ฟังก์ชันสำหรับเก็บผลลัพธ์ลง cache
     def _cache_set(self, key: str, value: Dict) -> None:
         if not self._cache_enabled:
             return
@@ -131,7 +136,7 @@ class AdvancedSlipOCR:
                 self._cache.popitem(last=False)
 
     def extract_text_with_typhoon_ocr(self, image: np.ndarray) -> str:
-        """ใช้ Typhoon OCR API เพื่อดึงข้อความจากภาพ"""
+        # ใช้ Typhoon OCR API เพื่อดึงข้อความจากภาพ
         if not self.api_key:
             logger.error("Typhoon OCR API key not configured")
             return ""
@@ -208,21 +213,32 @@ class AdvancedSlipOCR:
 
     def extract_time(self, text: str) -> Optional[str]:
         time_patterns = [
+            # (\d{1,2})	ชั่วโมง 1–2 หลัก
+            # [:.-]	ตัวคั่น :, . หรือ -
+            # (\d{2})	นาที 2 หลัก
             r"(\d{1,2})[:\.\-](\d{2})",
+            # ชั่วโมง 1–2 หลัก + ตัวคั่น + นาที 2 หลัก + วินาที 2 หลัก
             r"(\d{1,2})[:\.\-](\d{2})[:\.\-](\d{2})",
+            # ชั่วโมง 1–2 หลัก + ตัวคั่น + นาที 2 หลัก + คำบอกหน่วยเวลา
             r"(\d{1,2})[:\.\-](\d{2})\s*(น\.|นาที|min|hr|hour)",
         ]
         valid_times = []
+        # วนทุก regex pattern
         for pattern in time_patterns:
+            # หา match จากข้อความ
             matches = re.findall(pattern, text)
             for match in matches:
+                # เช็คว่ามีอย่างน้อย 2 ค่า (ชั่วโมงและนาที)
                 if len(match) >= 2:
                     try:
+                        # แปลง string → int
                         hour, minute = int(match[0]), int(match[1])
+                        # ตรวจว่าเป็นเวลาจริงไหม
                         if 0 <= hour <= 23 and 0 <= minute <= 59:
                             valid_times.append(f"{hour:02d}:{minute:02d}")
                     except ValueError:
                         continue
+        # เลือกเวลาที่เหมาะสมที่สุด (เช่น เวลาที่มากที่สุดที่ไม่ใช่ 00:00 หรือ 01:00)
         for time_str in sorted(valid_times, reverse=True):
             if time_str not in ["00:00", "01:00"]:
                 return time_str
@@ -230,33 +246,46 @@ class AdvancedSlipOCR:
 
     def extract_date(self, text: str) -> Optional[str]:
         date_patterns = [
+            # รูปแบบทั่วไป เช่น 01/02/2023, 1-2-23, 2023.02.01
             r"(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{2,4})",
+            # รูปแบบที่มีช่องว่าง เช่น 01 02 2023, 1 2 23
             r"(\d{1,2})\s+(\d{1,2})\s+(\d{2,4})",
+            # รูปแบบที่มีปีนำหน้า เช่น 2023/02/01, 23-2-1, 2023.2.1
             r"(\d{4})[/\-\.](\d{1,2})[/\-\.](\d{1,2})",
         ]
         thai_date_patterns = [
+            # รูปแบบวันที่ที่มีชื่อเดือนภาษาไทย เช่น 1 ม.ค. 2023, 01 มกราคม 2566
             r"(\d{1,2})\s*([ก-๙]{1,3})\.?\s*(\d{2,4})",
+            # รูปแบบที่มีชื่อเดือนภาษาไทยติดกับตัวเลข เช่น 1ม.ค.2023, 01มกราคม2566
             r"(\d{1,2})([ก-๙]{1,3})\.(\d{2,4})",
+            # รูปแบบที่มีชื่อเดือนภาษาไทยและปีติดกัน เช่น 1 ม.ค.2023, 01 มกราคม2566
             r"(\d{1,2})\s*([ก-๙]{2,})\s*(\d{2,4})",
+            # รูปแบบที่มีชื่อเดือนภาษาไทยและปีติดกันแบบไม่มีช่องว่าง เช่น 1ม.ค.2023, 01มกราคม2566
             r"(\d{1,2})\s*([ก-๙]{1,10})\.?\s*(\d{2,4})",
+            # 1 ม.ค 2023, 01ม.ค.2566, 15 มกราคม 67
             r"(\d{1,2})\s*([ก-๙]{1,}\.?)\s*(\d{2,4})",
+            # 01 ม.ค. 2566, 15 ธ.ค. 2024
             r"\d{2}\s(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s\d{4}",
+            # 15 ม.ค. 2567, 15 มค. 2567
             r"(\d{1,2})\s*([ก-๙\.]{2,5})\s*(\d{2,4})",
+            # \s* มีช่องว่า 0 ตัวขึ้นไป, ? มีหรือไม่มีก็ได้ (0 หรือ 1 ครั้ง), \d ตัวเลข 0–9 จำนวน 1 ตัว, \d{2,4} ตัวเลขที่มีความยาว 2–4 หลัก
         ]
-
+        # วนทุก regex pattern
         for pattern in date_patterns:
             matches = re.findall(pattern, text)
             for match in matches:
                 if len(match) == 3 and self.is_valid_date(match):
                     return f"{match[0]}/{match[1]}/{match[2]}"
-
+        # วนทุก pattern สำหรับวันที่ที่มีชื่อเดือนภาษาไทย
         for pattern in thai_date_patterns:
             matches = re.findall(pattern, text)
             for match in matches:
                 if len(match) == 3:
                     day, thai_month, year_str = match
+                    # ลบอักขระที่ไม่ใช่ตัวอักษรไทยและจุดออกจากชื่อเดือน
                     clean_month = re.sub(r"[^\u0E00-\u0E7F\.]", "", thai_month)
                     month_num = None
+                    # ตรวจสอบว่า clean_month ตรงกับ key ใน self.thai_months หรือไม่
                     for key, value in self.thai_months.items():
                         if key in clean_month or clean_month.startswith(
                             key.replace(".", "")
@@ -293,12 +322,14 @@ class AdvancedSlipOCR:
                             return f"{int(day):02d}/{month_num}/{year_ad}"
         return None
 
+    # ฟังก์ชันสำหรับตรวจสอบความถูกต้องของวันที่ (เช่น เดือนต้องอยู่ระหว่าง 1–12, วันต้องไม่เกินจำนวนวันที่มีในเดือนนั้น)
     def is_valid_date(self, date_parts: Tuple[str, str, str]) -> bool:
         try:
             day, month, year = map(int, date_parts)
             if not (1 <= month <= 12):
                 return False
             days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+            # ตรวจสอบปีอธิกสุรทิน (leap year) สำหรับเดือนกุมภาพันธ์
             if month == 2 and ((year % 4 == 0 and year % 100 != 0) or year % 400 == 0):
                 days_in_month[1] = 29
             if not (1 <= day <= days_in_month[month - 1]):
@@ -308,28 +339,28 @@ class AdvancedSlipOCR:
             return False
 
     def extract_amount(self, text: str) -> Optional[str]:
-    # ปรับ pattern ให้เฉพาะเจาะจงขึ้น
+        # ปรับ pattern ให้เฉพาะเจาะจงขึ้น
         amount_patterns = [
-            # 1. มีคำนำหน้าชัดเจน + ตัวเลข
+            # ยอดเงิน: 1,250.00, Total 350, Amount:99.50, รวม 5,000, เงิน 120
             r"(?:จำนวน|ยอดเงิน|จำนวนเงิน|ยอด|รวม|Total|Amount|Price|เงิน)[\s:]*([\d,]+(?:\.\d{1,2})?)",
-            # 2. มีสัญลักษณ์เงิน (บาท, ฿)
+            # 120 บาท, 1,500.00 บาท, 99฿, 300 THB, 250 baht
             r"([\d,]+(?:\.\d{1,2})?)\s*(?:บาท|฿|THB|baht)",
-            # 3. รูปแบบทั่วไป แต่ต้องมีทศนิยม (ลดโอกาสจับวันที่)
+            # 1250, 99.5, 4500.00, 1,200
             r"([\d,]+\.?\d{1,2})\s*(?:บาท|฿)?",
         ]
-        
+
         candidates = []
-        
+        # วนทุก regex pattern
         for pattern in amount_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             for match in matches:
                 amount_str = match if isinstance(match, str) else match[0]
-                # ลบเครื่องหมายจุลภาค
+                # ลบทุกอย่าง ยกเว้น: ตัวเลข จุดทศนิยม
                 clean_num = re.sub(r"[^\d.]", "", amount_str)
                 try:
                     value = float(clean_num)
-                    # กรองค่าที่ไม่น่าเป็นเงิน (เช่น 0-99 อาจเป็นวัน/เดือน แต่ถ้ามี .xx ให้ผ่าน)
-                    if '.' in clean_num or value >= 100:
+                    # กรองค่าที่ไม่น่าเป็นเงิน มีทศนิยม → ดูเหมือนเงิน, มากกว่า 100 → น่าเป็นยอดเงิน
+                    if "." in clean_num or value >= 100:
                         candidates.append((value, clean_num))
                     elif value >= 10:  # ยอมรับ 10-99 ถ้าไม่มีทางเลือกอื่น
                         candidates.append((value, clean_num))
@@ -340,7 +371,7 @@ class AdvancedSlipOCR:
             return None
 
         # เรียงจากค่ามาก → น้อย (หรือเลือกค่าที่มีทศนิยมก่อน)
-        candidates.sort(key=lambda x: (-('.' in x[1]), -x[0]))
+        candidates.sort(key=lambda x: (-("." in x[1]), -x[0]))
         return candidates[0][1]
 
     def extract_name(
@@ -348,22 +379,28 @@ class AdvancedSlipOCR:
     ) -> Optional[str]:
         if expected_names is None:
             expected_names = [
-            "ภูรินทร์สุขมั่น",
-            "ภูรินทร์",
-            "สุขมั่น",
-            "นายภูรินทร์",
-            "นาย ภูรินทร์",
-            "นายภูรินทร์ สุขมั่น",
-            "นาย ภูรินทร์ สุขมั่น"
-        ]
+                "ภูรินทร์สุขมั่น",
+                "ภูรินทร์",
+                "สุขมั่น",
+                "นายภูรินทร์",
+                "นาย ภูรินทร์",
+                "นายภูรินทร์ สุขมั่น",
+                "นาย ภูรินทร์ สุขมั่น",
+            ]
+        # ใช้ regex เพื่อดึงคำที่เป็นภาษาไทยออกมา
+        # คำภาษาไทยที่มี 2 ตัวอักษรขึ้นไป
         thai_words = re.findall(r"[ก-๙]{2,}", text)
         best_match = None
         best_score = 0
         for word in thai_words:
             for expected_name in expected_names:
+                # คำนวณคะแนนความคล้ายคลึงกันด้วยหลายวิธี
                 score = fuzz.ratio(word, expected_name)
+                # partial_ratio จะดูความคล้ายคลึงกันแม้ว่า word จะเป็นส่วนหนึ่งของ expected_name หรือไม่ก็ตาม
                 partial_score = fuzz.partial_ratio(word, expected_name)
+                # token_sort_ratio จะดูความคล้ายคลึงกันโดยไม่สนใจลำดับของคำ (เหมาะสำหรับชื่อที่อาจมีการสลับตำแหน่ง)
                 token_score = fuzz.token_sort_ratio(word, expected_name)
+                # รวมคะแนนจากหลายวิธีเพื่อให้ได้คะแนนที่ครอบคลุมมากขึ้น
                 total_score = (score + partial_score + token_score) / 3
                 if total_score > best_score and total_score > 70:
                     best_score = total_score
@@ -377,7 +414,7 @@ class AdvancedSlipOCR:
             # ใช้ Typhoon OCR API โดยตรง (API จัดการ preprocessing เอง)
             all_text = self.extract_text_with_typhoon_ocr(image)
             all_text = re.sub(r"\s+", " ", all_text).strip()
-
+            # ดึงข้อมูลต่างๆ จากข้อความที่ได้
             result = {
                 "time": self.extract_time(all_text),
                 "date": self.extract_date(all_text),
@@ -400,7 +437,9 @@ class AdvancedSlipOCR:
                 "full_name": None,
             }
 
+    # ฟังก์ชันสำหรับดึงข้อมูลจากภาพและจัดรูปแบบผลลัพธ์ให้เหมาะสม
     def extract_info(self, image):
+        # รองรับการรับภาพเป็น PIL Image หรือ numpy array
         if isinstance(image, Image.Image):
             image = np.array(image)
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
@@ -435,7 +474,7 @@ def main():
     aomsin = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ออมสิน.jpg"
     aomsin2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ออมสินเเก้.png"
     isaram = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\อิสลาม.png"
-    isaram2  = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\อิสลามเเก้.png"
+    isaram2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\อิสลามเเก้.png"
     thanachat = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ธนชาติ.png"
     thanachat2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ธนชาติเเก้.png"
 
