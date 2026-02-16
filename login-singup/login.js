@@ -41,6 +41,9 @@ loginButton.addEventListener("click", async (event) => {
 
       // หลังจาก login สำเร็จ ให้ไปที่หน้า apikey.html
       window.location.href = '../apikey/view-api-keys.html'; // เปลี่ยนเส้นทางไปยังหน้า apikey.html
+    } else if (response.status === 423) {
+      // กรณีบัญชีถูกล็อกชั่วคราว (Brute force protection)
+      alert(`บัญชีของคุณถูกล็อกชั่วคราว: ${data.error}`);
     } else {
       // แสดงข้อความผิดพลาดจาก back-end
       alert(data.error || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
