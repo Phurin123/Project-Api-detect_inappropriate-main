@@ -328,21 +328,19 @@ window.addEventListener('pageshow', function (event) {
     }
   });
 
-  // --- Add: warn user when they try to leave while an upload is in progress ---
-  // Show browser's leave-confirm when user attempts to close/refresh/navigate away
+  // ก่อนที่ผู้ใช้จะออกจากหน้าหรือรีเฟรช ให้ตรวจสอบว่ากำลังอัปโหลดอยู่หรือไม่ ถ้าใช่ ให้แสดงคำเตือน
   window.addEventListener('beforeunload', function (e) {
     if (isUploading) {
-      // Custom text may be ignored by modern browsers, but returnValue triggers the dialog.
+      // ข้อความนี้จะถูกแสดงในเบราว์เซอร์ที่รองรับ (ส่วนใหญ่จะแสดงข้อความมาตรฐานแทนข้อความที่กำหนดเอง)
       const msg = "การเปลี่ยนหน้าจะยกเลิกการประมวลผลสลิปที่กำลังส่งอยู่ หากออกจากหน้านี้ การประมวลผลจะถูกยกเลิก";
       e.preventDefault();
       e.returnValue = msg;
       return msg;
     }
-    // no return -> no prompt
+   
   });
 
-  // Intercept link clicks (delegated) and ask for confirmation if uploading.
-  // Allow anchors with href starting with '#' and links that open in a new tab.
+  // กรองรับการคลิกบนลิงก์ภายในหน้าในขณะที่กำลังอัปโหลดอยู่ เพื่อป้องกันการเปลี่ยนหน้าโดยไม่ได้ตั้งใจ
   document.addEventListener('click', function (ev) {
     if (!isUploading) return;
     const a = ev.target.closest && ev.target.closest('a');
@@ -357,7 +355,7 @@ window.addEventListener('pageshow', function (event) {
     }
   }, true);
 
-  // Intercept form submissions while uploading
+  // กรองรับการส่งฟอร์มภายในหน้าในขณะที่กำลังอัปโหลดอยู่ เพื่อป้องกันการเปลี่ยนหน้าโดยไม่ได้ตั้งใจ
   document.addEventListener('submit', function (ev) {
     if (!isUploading) return;
     const leave = confirm("การส่งฟอร์มหรือเปลี่ยนหน้าในขณะนี้จะยกเลิกการประมวลผลสลิปที่กำลังส่งอยู่ คุณต้องการดำเนินการต่อหรือไม่?");
