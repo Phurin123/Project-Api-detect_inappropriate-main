@@ -1,3 +1,4 @@
+// รวบรวมรุ่นที่เลือกและค่า threshold ของแต่ละรุ่น
 function collectModelSelections() {
   const selectedModels = [];
   const modelThresholds = {};
@@ -21,6 +22,7 @@ function collectModelSelections() {
   };
 }
 
+// สกัดป้ายชื่อที่ไม่ซ้ำกันจากข้อมูลการตรวจพบ
 function collectUniqueLabels(source) {
   const labels = [];
   const seen = new Set();
@@ -61,6 +63,7 @@ function collectUniqueLabels(source) {
   return labels;
 }
 
+// ล้างและซ่อนองค์ประกอบการแสดงผลสื่ออย่างเหมาะสม
 function resetMediaDisplay() {
   const imagePreview = document.getElementById('imagePreview');
   const processedImage = document.getElementById('processedImage');
@@ -99,6 +102,7 @@ function resetMediaDisplay() {
   });
 }
 
+// แสดงหรือซ่อน spinner ที่แสดงสถานะกำลังโหลด
 function setLoadingState(isLoading) {
   const loadingSpinner = document.getElementById('loadingSpinner');
   if (!loadingSpinner) return;
@@ -108,6 +112,7 @@ function setLoadingState(isLoading) {
   }
 }
 
+// ตั้งค่าข้อความผลลัพธ์และเปลี่ยนสีตามประเภท (success/error/info)
 function setResultMessage(message, type = 'info') {
   const resultText = document.getElementById('resultText');
   if (!resultText) {
@@ -122,8 +127,7 @@ function setResultMessage(message, type = 'info') {
   resultText.style.color = colors[type] || '#ecf0f1';
 }
 
-// --- New Unified Upload Handler ---
-
+// เปิดตัวเลือกไฟล์เพื่ออัปโหลดรูปภาพหรือไฟล์ ZIP
 async function handleFileUpload() {
   const input = document.createElement('input');
   input.type = 'file';
@@ -141,12 +145,14 @@ async function handleFileUpload() {
   input.click();
 }
 
+// ฟังก์ชันสำรองสำหรับประมวลผลรูปภาพเดียวผ่านการประมวลผลหลายรูป
 async function processSingleImage(file) {
   // This function is no longer used but kept for potential rollback or reference.
   // Logic moved to processMultipleImages to unify the UI output.
   await processMultipleImages([file]);
 }
 
+// ตรวจสอบว่าจำนวนไฟล์ที่อัปโหลดไม่เกิน 100 รูป
 function validateImageUploadCount(files) {
   if (files.length > 100) {
     alert('คุณสามารถอัปโหลดรูปภาพได้สูงสุด 100 รูปเท่านั้น');
@@ -155,7 +161,7 @@ function validateImageUploadCount(files) {
   return true;
 }
 
-// Add validation for video duration
+// ตรวจสอบว่าความยาววิดีโอไม่เกิน 60 วินาที
 async function validateVideoDuration(file) {
   return new Promise((resolve) => {
     const video = document.createElement('video');
@@ -181,6 +187,7 @@ async function validateVideoDuration(file) {
   });
 }
 
+// ประมวลผลหลายรูปภาพและแสดงผลในแกลเลอรี่พร้อมสถานะการทดสอบ
 async function processMultipleImages(files) {
   if (!validateImageUploadCount(files)) return;
 
@@ -324,7 +331,7 @@ async function processMultipleImages(files) {
   }
 }
 
-// Update uploadVideo to validate video duration
+// เปิดตัวเลือกไฟล์เพื่ออัปโหลดและประมวลผลวิดีโอ
 async function uploadVideo() {
   const input = document.createElement('input');
   input.type = 'file';
@@ -422,17 +429,20 @@ async function uploadVideo() {
   input.click();
 }
 
+// ดาวน์โหลดไฟล์คู่มือโครงการ
 function downloadManual() {
   const url = `${window.API_BASE_URL}/manual`;
   window.location.href = url;
 }
 
+// สลับการแสดง/ซ่อนส่วนการตั้งค่าขั้นสูง
 function toggleAdvanced() {
   const advancedSection = document.getElementById('advanced-settings');
   if (!advancedSection) return;
   advancedSection.style.display = advancedSection.style.display === 'none' ? 'block' : 'none';
 }
 
+// ตรวจสอบว่า URL เป็นที่อยู่ HTTP/HTTPS ที่ถูกต้อง
 function isValidImageURL(url) {
   try {
     const urlObj = new URL(url);
@@ -446,6 +456,7 @@ function isValidImageURL(url) {
   }
 }
 
+// ดาวน์โหลดรูปภาพจาก URL และประมวลผลด้วยโมเดลที่เลือก
 async function uploadImageFromURL() {
   const urlInput = document.getElementById('imageUrl');
   const imageUrl = urlInput?.value?.trim();

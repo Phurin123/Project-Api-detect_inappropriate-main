@@ -46,14 +46,17 @@ window.addEventListener('pageshow', function (event) {
   // ใช้แถบเตือนคงที่จาก receipt.html (id="uploadWarning")
   const uploadWarning = document.getElementById('uploadWarning');
 
+  // แสดงแถบเตือนการอัปโหลด
   function showUploadWarning() {
     if (uploadWarning) uploadWarning.style.display = 'block';
   }
 
+  // ซ่อนแถบเตือนการอัปโหลด
   function hideUploadWarning() {
     if (uploadWarning) uploadWarning.style.display = 'none';
   }
 
+  // ตั้งค่าข้อความสถานะการอัปโหลดและเปลี่ยนสี
   function setUploadStatus(message, tone = "info") {
     const colors = {
       success: "green",
@@ -64,6 +67,7 @@ window.addEventListener('pageshow', function (event) {
     uploadStatus.textContent = message;
   }
 
+  // กำหนดเวลาเปลี่ยนเส้นทางไปหน้าดูรับชมคีย์ API
   function scheduleRedirect(message) {
     if (redirectScheduled) {
       return;
@@ -77,6 +81,7 @@ window.addEventListener('pageshow', function (event) {
     }, REDIRECT_DELAY_MS);
   }
 
+  // ปิดการใช้งานปุ่มอัปโหลดและเปลี่ยนรูปลักษณ์
   function disableUpload(reasonText) {
     uploadBtn.disabled = true;
     uploadBtn.style.backgroundColor = "#ccc";
@@ -86,12 +91,14 @@ window.addEventListener('pageshow', function (event) {
     }
   }
 
+  // เปิดใช้งานปุ่มอัปโหลดด้วย UI พร้อม
   function enableUpload() {
     uploadBtn.disabled = false;
     uploadBtn.style.backgroundColor = "";
     uploadBtn.style.cursor = "pointer";
   }
 
+  // ดึงเวลาเริ่มนับถอยหลังจากที่บันทึกไว้
   function getCountdownStart() {
     const raw = storage.get(STORAGE_KEYS.countdownStart);
     if (!raw) {
@@ -101,6 +108,7 @@ window.addEventListener('pageshow', function (event) {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
+  // ดึงเวลาหมดเขตของนับถอยหลังเป็น timestamp
   function getCountdownDeadline() {
     const raw = storage.get(STORAGE_KEYS.countdownDeadline);
     if (raw) {
@@ -118,17 +126,20 @@ window.addEventListener('pageshow', function (event) {
     return fallback;
   }
 
+  // ลบข้อมูลเวลากาารนับถอยหลังทั้งหมด
   function clearCountdownState() {
     storage.remove(STORAGE_KEYS.countdownStart);
     storage.remove(STORAGE_KEYS.countdownDeadline);
   }
 
+  // ลบข้อมูลคำสั่งซื้อและนับถอยหลังทั้งหมด
   function clearOrderState() {
     clearCountdownState();
     storage.remove(STORAGE_KEYS.qrCodeUrl);
     storage.remove(STORAGE_KEYS.orderMeta);
   }
 
+  // ส่งคำขอยกเลิกคำสั่งซื้อไปยังเซิร์ฟเวอร์
   function cancelActiveOrder(reason = "timeout") {
     if (cancelOrderRequest) {
       return cancelOrderRequest;
@@ -170,6 +181,7 @@ window.addEventListener('pageshow', function (event) {
     return cancelOrderRequest;
   }
 
+  // ดึงข้อมูลคำสั่งซื้อที่บันทึกไว้ (หรือ null ถ้าไม่มี)
   function getOrderMeta() {
     const raw = storage.get(STORAGE_KEYS.orderMeta);
     if (!raw) {
@@ -184,10 +196,12 @@ window.addEventListener('pageshow', function (event) {
     }
   }
 
+  // ตรวจสอบว่ามีคำสั่งซื้อที่ยังใช้งานอยู่หรือไม่
   function hasActiveOrder() {
     return Boolean(getOrderMeta());
   }
 
+  // หยุดการนับถอยหลัง
   function stopCountdown() {
     if (countdownInterval) {
       clearInterval(countdownInterval);
@@ -195,6 +209,7 @@ window.addEventListener('pageshow', function (event) {
     }
   }
 
+  // จัดการเมื่อเวลานับถอยหลังหมด ยกเลิกคำสั่งซื้อและเตรียมเปลี่ยนหน้า
   function handleCountdownExpired() {
     stopCountdown();
     const expiredDuringUpload = isUploading;
@@ -227,6 +242,7 @@ window.addEventListener('pageshow', function (event) {
     }
   }
 
+  // แสดงข้อความไม่มีตัวนับเวลาและเตรียมเปลี่ยนหน้า
   function showNoTimerMessage() {
     stopCountdown();
     if (countdownDisplay) {
@@ -241,6 +257,7 @@ window.addEventListener('pageshow', function (event) {
     scheduleRedirect();
   }
 
+  // อัปเดตการแสดงนับถอยหลังบนหน้าจอ
   function updateCountdownDisplay() {
     if (!countdownDisplay) {
       return;
@@ -262,6 +279,7 @@ window.addEventListener('pageshow', function (event) {
     countdownDisplay.style.color = "#d9534f";
   }
 
+  // สร้างและเริ่มการนับถอยหลังหากยังมีเวลา
   function ensureCountdown() {
     const deadline = getCountdownDeadline();
     if (!deadline) {
@@ -278,6 +296,7 @@ window.addEventListener('pageshow', function (event) {
     return true;
   }
 
+  // ตรวจสอบว่าคำสั่งซื้อและเวลาพร้อมให้อัปโหลดสลิปหรือไม่
   function ensureOrderReady() {
     if (!hasActiveOrder()) {
       setUploadStatus(
@@ -299,6 +318,7 @@ window.addEventListener('pageshow', function (event) {
     return true;
   }
 
+  // จัดการเมื่อคำสั่งซื้อถูกลบโดย tab อื่น
   function handleOrderRemoved() {
     if (isUploading) {
       return;

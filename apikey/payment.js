@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', function () {
     amountSpan.innerText = initialAmount;
   }
 
+  // ตั้งค่าข้อความสถานะและเปลี่ยนสีตามประเภท (success/error/info)
   function setStatus(message, tone = "info") {
     if (!paymentStatus) {
       return;
@@ -78,6 +79,7 @@ document.addEventListener('DOMContentLoaded', function () {
     paymentStatus.textContent = message;
   }
 
+  // ปิดการใช้งานปุ่มชำระเงินและแสดงข้อความแจ้ง
   function disableConfirm(hintText) {
     confirmPaymentBtn.disabled = true;
     confirmPaymentBtn.style.backgroundColor = "#ccc";
@@ -87,6 +89,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // เปิดใช้งานปุ่มชำระเงินด้วย UI พร้อม
   function enableConfirm() {
     confirmPaymentBtn.disabled = false;
     confirmPaymentBtn.style.backgroundColor = "";
@@ -96,6 +99,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // บันทึกเวลาเริ่มนับถอยหลัง 5 นาที
   function setCountdownStart(timestamp) {
     storage.set(STORAGE_KEYS.countdownStart, String(timestamp));
     storage.set(
@@ -104,6 +108,7 @@ document.addEventListener('DOMContentLoaded', function () {
     );
   }
 
+  // ดึงเวลาเริ่มนับถอยหลังจากที่บันทึกไว้
   function getCountdownStart() {
     const raw = storage.get(STORAGE_KEYS.countdownStart);
     if (!raw) {
@@ -113,6 +118,7 @@ document.addEventListener('DOMContentLoaded', function () {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
+  // ดึงเวลาหมดเขตของนับถอยหลังเป็น timestamp
   function getCountdownDeadline() {
     const raw = storage.get(STORAGE_KEYS.countdownDeadline);
     if (raw) {
@@ -130,29 +136,35 @@ document.addEventListener('DOMContentLoaded', function () {
     return fallback;
   }
 
+  // ลบข้อมูลเวลาการนับถอยหลังทั้งหมด
   function clearCountdownState() {
     storage.remove(STORAGE_KEYS.countdownStart);
     storage.remove(STORAGE_KEYS.countdownDeadline);
   }
 
+  // ลบข้อมูลคำสั่งซื้อและนับถอยหลังทั้งหมด
   function clearOrderState() {
     clearCountdownState();
     storage.remove(STORAGE_KEYS.qrCodeUrl);
     storage.remove(STORAGE_KEYS.orderMeta);
   }
 
+  // บันทึก URL ของรหัส QR ที่สร้าง
   function persistQrCode(url) {
     storage.set(STORAGE_KEYS.qrCodeUrl, url);
   }
 
+  // ดึง URL ของรหัส QR ที่บันทึกไปก่อนหน้า
   function getStoredQrCode() {
     return storage.get(STORAGE_KEYS.qrCodeUrl);
   }
 
+  // บันทึกข้อมูลคำสั่งซื้อ (ref_code, amount, package, ฯลฯ)
   function persistOrderMeta(meta) {
     storage.set(STORAGE_KEYS.orderMeta, JSON.stringify(meta));
   }
 
+  // ดึงข้อมูลคำสั่งซื้อที่บันทึกไว้ (หรือ null ถ้าไม่มี)
   function getOrderMeta() {
     const raw = storage.get(STORAGE_KEYS.orderMeta);
     if (!raw) {
@@ -167,6 +179,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // ส่งคำขอยกเลิกคำสั่งซื้อไปยังเซิร์ฟเวอร์
   function cancelActiveOrder(reason = "timeout") {
     if (cancelOrderRequest) {
       return cancelOrderRequest;
@@ -207,6 +220,7 @@ document.addEventListener('DOMContentLoaded', function () {
     return cancelOrderRequest;
   }
 
+  // อัปเดตการนับถอยหลังแสดงเวลาที่เหลือ
   function updateCountdown(deadline) {
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) {
@@ -223,6 +237,7 @@ document.addEventListener('DOMContentLoaded', function () {
     countdownDisplay.style.color = "#d9534f";
   }
 
+  // หยุดการนับถอยหลัง
   function stopCountdown() {
     if (countdownInterval) {
       clearInterval(countdownInterval);
@@ -230,12 +245,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // เริ่มนับถอยหลังจากเวลาหมดเขต
   function runCountdown(deadline) {
     stopCountdown();
     updateCountdown(deadline);
     countdownInterval = setInterval(() => updateCountdown(deadline), 1000);
   }
 
+  // สร้างเรียมการนับถอยหลังหากยังไม่หมดเวลา
   function resumeCountdownIfPossible() {
     const deadline = getCountdownDeadline();
     if (!deadline) {
@@ -249,6 +266,7 @@ document.addEventListener('DOMContentLoaded', function () {
     return true;
   }
 
+  // จัดการเมื่อเวลานับถอยหลังหมด ยกเลิกคำสั่งซื้อและสร้างใหม่
   function onCountdownExpired() {
     cancelActiveOrder("countdown-expired");
     clearOrderState();
@@ -259,6 +277,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // ส่งคำขอสร้างคำสั่งซื้อและรหัส QR ใหม่ไปยังเซิร์ฟเวอร์
   async function requestNewOrder() {
     if (isGeneratingOrder) {
       return;

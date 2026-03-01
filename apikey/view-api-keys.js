@@ -1,3 +1,4 @@
+// ดึงโทเค็นจาก URL query parameter และบันทึกลง localStorage
 (function syncTokenFromUrl() {
 
     const params = new URLSearchParams(window.location.search);
@@ -18,6 +19,7 @@
 
 let hasShownSessionExpiredAlert = false;
 
+// ตรวจสอบและแจ้งเตือนเมื่อเซสชันหมดอายุ (401 Unauthorized)
 function handleUnauthorizedResponse(response) {
     if (response.status !== 401) {
         return false;
@@ -44,6 +46,7 @@ const API_DETAILS_HIDE_LABEL = 'Hide Details';
 
 
 
+// แปลงอักขระพิเศษเป็น HTML entities เพื่อป้องกัน XSS
 function escapeHtml(value) {
 
     if (value === null || value === undefined) {
@@ -68,6 +71,7 @@ function escapeHtml(value) {
 
 
 
+// แปลงข้อมูลวันที่จากรูปแบบต่างๆ เป็น Date object
 function parseDate(value) {
 
     if (!value) {
@@ -123,6 +127,7 @@ function parseDate(value) {
 
 
 
+// จัดรูปแบบวันที่เป็นรูปแบบไทยพร้อมเวลา
 function formatDateTime(value) {
     const parsed = parseDate(value);
     if (!parsed) {
@@ -143,6 +148,7 @@ function formatDateTime(value) {
 
 
 
+// แสดงขีดจำกัดการใช้งาน (-1 = ไม่จำกัด)
 function formatQuota(quota) {
 
     if (quota === -1) {
@@ -163,6 +169,7 @@ function formatQuota(quota) {
 
 
 
+// จัดรูปแบบอาร์เรย์ประเภทการวิเคราะห์เป็นข้อความแยกด้วยจุลภาค
 function formatAnalysisTypes(types) {
 
     if (!Array.isArray(types) || types.length === 0) {
@@ -177,6 +184,7 @@ function formatAnalysisTypes(types) {
 
 
 
+// แสดง threshold ของแต่ละโมเดลในรูปแบบสบาย ๆ
 function formatThresholds(thresholds) {
 
     if (!thresholds || typeof thresholds !== 'object' || Array.isArray(thresholds)) {
@@ -215,6 +223,7 @@ function formatThresholds(thresholds) {
 
 
 
+// จัดรูปแบบประเภทสื่อที่เข้าถึงได้ (Image/Video)
 function formatMediaAccess(access) {
 
     if (!Array.isArray(access) || access.length === 0) {
@@ -238,6 +247,7 @@ function formatMediaAccess(access) {
 
 
 
+// จัดรูปแบบรูปแบบผลลัพธ์ (Blur/Bounding Box)
 function formatOutputModes(modes) {
 
     if (!Array.isArray(modes) || modes.length === 0) {
@@ -261,6 +271,7 @@ function formatOutputModes(modes) {
 
 
 
+// สร้าง badge แสดงสถานะ (ผ่าน/ไม่ผ่าน/ข้อผิดพลาด)
 function formatStatusBadge(status) {
     const normalized = (status || '').toLowerCase();
 
@@ -280,6 +291,7 @@ function formatStatusBadge(status) {
 
 
 
+// ดึงชื่อผู้ใช้จากเซิร์ฟเวอร์และแสดงบนหน้า
 async function fetchUsername() {
 
     const token = localStorage.getItem('token');
@@ -319,6 +331,7 @@ async function fetchUsername() {
 
 
 
+// ดึงรายการ API Keys ของผู้ใช้จากเซิร์ฟเวอร์
 async function fetchApiKeys() {
 
     const token = localStorage.getItem('token');
@@ -371,6 +384,7 @@ async function fetchApiKeys() {
 
 
 
+// ดึงประวัติการใช้งาน API Key จากเซิร์ฟเวอร์
 async function fetchApiKeyHistory(limit = 50) {
 
     const token = localStorage.getItem('token');
@@ -421,6 +435,7 @@ async function fetchApiKeyHistory(limit = 50) {
 
 }
 
+// สร้าง HTML สำหรับแสดง API Keys และประวัติการใช้งาน
 function renderApiKeysWithHistory(apiKeys, historyEntries) {
 
     const listElement = document.getElementById('apiKeysList');
@@ -461,6 +476,7 @@ function renderApiKeysWithHistory(apiKeys, historyEntries) {
 
 }
 
+// สร้างการ์ด API Key พร้อมรายละเอียดและประวัติการใช้งาน
 function createApiKeyCard(key, historyEntries, historyId, detailsId) {
 
     const apiKeyText = escapeHtml(key.api_key || '—');
@@ -529,6 +545,7 @@ function createApiKeyCard(key, historyEntries, historyId, detailsId) {
 
 }
 
+// สร้างการ์ดสำหรับประวัติการใช้งานที่ไม่สามารถจับคู่กับ API Key ได้
 function createOrphanHistoryCard(orphanKey, historyEntries, historyId) {
 
     const safeKey = orphanKey ? escapeHtml(orphanKey) : 'Unknown';
@@ -553,6 +570,7 @@ function createOrphanHistoryCard(orphanKey, historyEntries, historyId) {
 
 }
 
+// สร้างส่วนการแสดงประวัติการใช้งาน HTML
 function createHistorySection(historyId, historyContent) {
 
     return `
@@ -577,6 +595,7 @@ function createHistorySection(historyId, historyContent) {
 
 }
 
+// แสดงรายการประวัติการใช้งานแต่ละครั้ง พร้อมลิงก์ดูรูป/วิดีโอ
 function renderHistoryEntry(entry) {
 
     const statusBadge = formatStatusBadge(entry.status);
@@ -662,6 +681,7 @@ function renderHistoryEntry(entry) {
 
 }
 
+// จัดกลุ่มประวัติการใช้งานตามเลข API Key
 function groupHistoryByKey(historyEntries) {
 
     const grouped = new Map();
@@ -698,6 +718,7 @@ function groupHistoryByKey(historyEntries) {
 
 }
 
+// โหลดและแสดง API Keys พร้อมประวัติการใช้งาน
 async function loadApiKeysWithHistory() {
 
     const listElement = document.getElementById('apiKeysList');
@@ -876,6 +897,7 @@ window.onload = async function () {
 
 
 
+// ลบโทเค็นและเปลี่ยนเส้นทางกลับไปหน้าแรก
 function logout() {
 
     localStorage.removeItem('token');
