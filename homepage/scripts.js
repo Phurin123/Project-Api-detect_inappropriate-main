@@ -12,7 +12,7 @@ function collectModelSelections() {
   });
 
   if (!selectedModels.length) {
-    alert('กรุณาเลือกโมเดลอย่างน้อย 1 โมเดลก่อนอัปโหลดค่ะ');
+    alert('กรุณาเลือกโมเดลอย่างน้อย 1 โมเดลก่อนอัปโหลด');
     return null;
   }
 
