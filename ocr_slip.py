@@ -462,7 +462,7 @@ class AdvancedSlipOCR:
 # ส่วน main() ไม่เปลี่ยนมาก — แต่ลบการพิมพ์ receipt_number, merchant, confidence
 def main():
     ocr = AdvancedSlipOCR()
-    kasikor = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กสิกร.jpeg"
+    kasikor = r"C:\Users\lovew\Downloads\สื่อ (8).jpg"
     kasikor2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กสิกร.jpeg"
     krungthai = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กรุงไทย.jpg"
     krungthai2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\กรุงไทย.jpg"
@@ -479,7 +479,7 @@ def main():
     thanachat = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ธนชาติ.png"
     thanachat2 = r"C:\Users\lovew\OneDrive\รูปภาพ\slip-test\ธนชาติเเก้.png"
 
-    image_path = kasikor2
+    image_path = kasikor
 
     if os.path.exists(image_path):
         image = cv2.imread(image_path)
