@@ -11,7 +11,9 @@ venv/
 __pycache__/
 .env
 *.pyc
- 
+.vscode/
+all_results/
+
 # ละเว้นไฟล์ตามนามสกุล (เช่น ไฟล์ log ทั้งหมด หรือไฟล์ที่ติด Rule)
 *.log
 *.env
